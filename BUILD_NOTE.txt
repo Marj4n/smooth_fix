@@ -1,0 +1,17 @@
+Smooth Fix 1.0.2 build layout
+
+There is intentionally NO ClientModInitializer anymore.
+
+Main entrypoint:
+  org.marj4n.smooth_fix.SmoothFix
+
+Client-only behavior:
+  smooth_fix.client.mixins.json
+  is gated by "environment": "client" in fabric.mod.json.
+
+Expected build:
+  .\gradlew clean build --no-build-cache
+
+If Gradle still mentions SmoothFixClient.java after replacing the project with this source,
+the old source file is still present in the local project or Gradle/IDE is building an older copy.
+Delete build/, .gradle/, and the old src/.../client/SmoothFixClient.java before rebuilding.

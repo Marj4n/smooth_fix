@@ -1,0 +1,55 @@
+# Gradle
+.gradle/
+build/
+out/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# VS Code
+.vscode/
+
+# Eclipse
+.classpath
+.project
+.settings/
+bin/
+
+# Fabric / Loom runtime
+run/
+runs/
+
+# Java
+*.class
+hs_err_pid*
+replay_pid*
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary / backup files
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+
+# Local test configs / generated runtime data
+config/
+world/
+saves/
+
+# Built mod jars
+*.jar
+
+# Keep Gradle Wrapper JAR
+!gradle/wrapper/gradle-wrapper.jar

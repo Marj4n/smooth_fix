@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "smooth_fix",
+  "version": "${version}",
+  "name": "Smooth Fix",
+  "description": "Targeted compatibility and stability fixes for Smooth Odyssey on Fabric 1.20.1.",
+  "authors": [
+    "Marj4n"
+  ],
+  "contact": {},
+  "license": "All-Rights-Reserved",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "org.marj4n.smooth_fix.SmoothFix"
+    ]
+  },
+  "mixins": [
+    {
+      "config": "smooth_fix.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "${minecraft_version}",
+    "java": ">=17"
+  },
+  "suggests": {
+    "emi": "*",
+    "emicompat": "*",
+    "spell_engine": "*",
+    "emi_loot": "*",
+    "tumbleweed": "*",
+    "obscure_api": "*"
+  }
+}
