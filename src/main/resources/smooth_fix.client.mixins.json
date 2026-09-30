@@ -1,0 +1,16 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "org.marj4n.smooth_fix.mixin.client",
+  "compatibilityLevel": "JAVA_17",
+  "plugin": "org.marj4n.smooth_fix.mixin.SmoothFixMixinPlugin",
+  "client": [
+    "EmiCompatPluginMixin",
+    "TumbleweedClientInitMixin",
+    "ObscureTooltipFoodMixin",
+    "EmiRepairIngredientMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}
