@@ -44,9 +44,9 @@ desktop.ini
 *~
 
 # Local test configs / generated runtime data
-config/
-world/
-saves/
+/config/
+/world/
+/saves/
 
 # Built mod jars
 *.jar

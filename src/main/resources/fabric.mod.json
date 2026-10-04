@@ -11,15 +11,21 @@
   "license": "All-Rights-Reserved",
   "environment": "*",
   "entrypoints": {
+    "client": ["org.marj4n.smooth_fix.diagnostics.ClientDiagnostics"],
     "main": [
       "org.marj4n.smooth_fix.SmoothFix"
     ]
+  },
+  "languageAdapters": {
+    "smooth_fix:early_server_compat": "org.marj4n.smooth_fix.bootstrap.ServerCompatibilityAdapter"
   },
   "mixins": [
     {
       "config": "smooth_fix.client.mixins.json",
       "environment": "client"
-    }
+    },
+    {"config": "smooth_fix.server.mixins.json", "environment": "server"},
+    "smooth_fix.common.mixins.json"
   ],
   "depends": {
     "fabricloader": ">=${loader_version}",

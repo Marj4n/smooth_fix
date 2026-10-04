@@ -1,0 +1,9 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "org.marj4n.smooth_fix.mixin.server",
+  "compatibilityLevel": "JAVA_17",
+  "plugin": "org.marj4n.smooth_fix.mixin.SmoothFixMixinPlugin",
+  "mixins": ["EntityRotationGuardMixin", "ConfirmedTeleportAnchorMixin"],
+  "injectors": {"defaultRequire": 1}
+}

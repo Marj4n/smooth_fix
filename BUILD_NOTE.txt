@@ -1,17 +1,17 @@
-Smooth Fix 1.0.2 build layout
+Smooth Fix 1.0.5 / build 1.0.5-perf-r2-advanced1
 
-There is intentionally NO ClientModInitializer anymore.
+This source contains the advanced real-world benchmark patch.
+Run on the project machine with JDK 21:
+  .\gradlew clean build
 
-Main entrypoint:
-  org.marj4n.smooth_fix.SmoothFix
+Expected distributable after a successful build:
+  build/libs/smooth_fix-1.0.5-1.20.1.jar
 
-Client-only behavior:
-  smooth_fix.client.mixins.json
-  is gated by "environment": "client" in fabric.mod.json.
+Important: the JAR recovered alongside the old perf-r2 source predates this advanced patch and must NOT be renamed/reused as the advanced build.
 
-Expected build:
-  .\gradlew clean build --no-build-cache
+Local isolated-session checks completed:
+- AdvancedStagePlanCheck PASS (9/9 transitions in order)
+- parser-level javac syntax scan: no syntax errors in new runtime files
+- exact Yarn 1.20.1 APIs and EMI 1.1.24 API/source reviewed for the new calls
 
-If Gradle still mentions SmoothFixClient.java after replacing the project with this source,
-the old source file is still present in the local project or Gradle/IDE is building an older copy.
-Delete build/, .gradle/, and the old src/.../client/SmoothFixClient.java before rebuilding.
+A full Loom build could not be run in this isolated container because the Gradle wrapper distribution/dependency network is unavailable and there is no local Gradle cache.

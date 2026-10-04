@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "smoothfix_verification_only",
+  "version": "1.0.0",
+  "name": "Isolated Smooth Fix verification fixture - DO NOT DISTRIBUTE",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "verification.ServerRuntimeCheck",
+      "verification.BenchmarkRuntimeCheck"
+    ],
+    "preLaunch": [
+      "verification.ClientPreLaunchCheck"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "fabric-api": "*",
+    "smooth_fix": "*"
+  }
+}
