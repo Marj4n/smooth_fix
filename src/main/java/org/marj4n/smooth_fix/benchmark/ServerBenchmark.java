@@ -37,6 +37,7 @@ public final class ServerBenchmark {
     private static final Set<Entity> staleActors = new LinkedHashSet<>();
     private static long completedAt;
     private ServerBenchmark() { }
+    public static boolean isRunning(){return active!=null;}
     private static boolean reserved(ServerWorld world){var key=world.getRegistryKey();return key.equals(ARENA)||key.equals(TERRAIN)||key.equals(LUNAR);}
     public static boolean allowSpawn(ServerWorld world,Entity entity){
         if(!reserved(world) || entity instanceof net.minecraft.entity.player.PlayerEntity)return true;
@@ -45,13 +46,12 @@ public final class ServerBenchmark {
         entity.addCommandTag("smoothfix_bench:"+r.id+":"+r.phase);return true;
     }
     private record Stage(String name,String mode,EntityType<?> type,int count) { }
-    public static boolean isRunning(){return active!=null;}
     public static void install() {
+        BenchmarkFinalization.install();
         CommandRegistrationCallback.EVENT.register((dispatcher,access,env)->dispatcher.register(
             CommandManager.literal("smoothfix").requires(s->s.hasPermissionLevel(2))
                 .then(CommandManager.literal("stress")
                     .then(CommandManager.literal("start").executes(c->start(c.getSource(),suite(),0)))
-                    .then(CommandManager.literal("advanced").executes(c->AdvancedBenchmark.start(c.getSource())))
                     .then(CommandManager.literal("wither").executes(c->start(c.getSource(),List.of(new Stage("wither_10","combat",EntityType.WITHER,10)),0))
                         .then(CommandManager.argument("count",IntegerArgumentType.integer(1,10)).executes(c->{int n=IntegerArgumentType.getInteger(c,"count");return start(c.getSource(),List.of(new Stage("wither_"+n,"combat",EntityType.WITHER,n)),0);})))
                     .then(CommandManager.literal("soak").then(CommandManager.argument("minutes",IntegerArgumentType.integer(5,60)).executes(c->start(c.getSource(),suite(),IntegerArgumentType.getInteger(c,"minutes")))))
@@ -64,9 +64,9 @@ public final class ServerBenchmark {
                             if(type==EntityType.WITHER && count>10){c.getSource().sendError(Text.literal("Wither limit is 10."));return 0;}
                             return start(c.getSource(),List.of(new Stage("feature_"+id,"combat",type,count)),0);
                         }))))
-                    .then(CommandManager.literal("list").executes(c->{c.getSource().sendFeedback(()->Text.literal("Legacy suite: baseline, village 32, mobs 16/32/64, effects, Blood Moon, Withers, teleport, exploration. Advanced: /smoothfix stress advanced = real terrain/cold chunk/structures/chest+Lootr/inventory+hotbar/EMI/combat/TNT with full player recovery verification."),false);return 1;}))
-                    .then(CommandManager.literal("status").executes(c->{String status=active!=null?active.status():AdvancedBenchmark.status();c.getSource().sendFeedback(()->Text.literal(status),false);return 1;}))
-                    .then(CommandManager.literal("stop").executes(c->{if(active!=null){active.finish("stopped_by_operator");return 1;}return AdvancedBenchmark.stop("stopped_by_operator")?1:0;})))));
+                    .then(CommandManager.literal("list").executes(c->{c.getSource().sendFeedback(()->Text.literal("Suite: baseline, village 32, mobs 16/32/64 + golems, positive effects, Blood Moon, 10 Withers, teleport, terrain exploration. Wither: 1..10. Feature: registered mob ID, 1..32. Blood Moon uses Enhanced Celestials 2 in its own night arena when installed. Individual mod abilities are not automatically forced; profile them with /smoothfix profile and /smoothfixc profile."),false);return 1;}))
+                    .then(CommandManager.literal("status").executes(c->{c.getSource().sendFeedback(()->Text.literal(active==null?AdvancedBenchmark.status():active.status()),false);return 1;}))
+                    .then(CommandManager.literal("stop").executes(c->{if(active!=null){active.finish("stopped_by_operator");return 1;}return AdvancedBenchmark.stop()?1:0;})))));
         ServerTickEvents.END_SERVER_TICK.register(server->{discardStaleActors();if(completed!=null && System.nanoTime()-completedAt>60_000_000_000L)completed=null;Run r=active;if(r!=null)try{r.tick();}catch(Exception e){SmoothFix.LOGGER.error("Benchmark stage failed",e);r.finish("failed: "+e.getClass().getSimpleName()+": "+e.getMessage());}});
         ServerEntityEvents.ENTITY_LOAD.register((entity,world)->{
             if(!reserved(world) || entity instanceof net.minecraft.entity.player.PlayerEntity)return;
@@ -79,7 +79,7 @@ public final class ServerBenchmark {
         ServerLifecycleEvents.SERVER_STOPPING.register(server->{if(active!=null)active.finish("server_stopping");discardStaleActors();});
         ServerLifecycleEvents.SERVER_STOPPED.register(server->{staleActors.clear();completed=null;});
         ServerPlayConnectionEvents.JOIN.register((handler,sender,server)->BenchmarkRecovery.restore(handler.player));
-        ServerPlayConnectionEvents.DISCONNECT.register((handler,server)->{if(active!=null && active.owner.equals(handler.player.getUuid()))active.finish("owner_disconnected");BenchmarkRecovery.restore(handler.player);});
+        ServerPlayConnectionEvents.DISCONNECT.register((handler,server)->{if(active!=null && active.owner.equals(handler.player.getUuid()))active.finish("owner_disconnected",handler.player);BenchmarkRecovery.restore(handler.player);});
         ServerPlayNetworking.registerGlobalReceiver(BenchmarkProtocol.RESPONSE,(server,player,handler,buf,sender)->{
             UUID id=buf.readUuid();int phase=buf.readInt();int action=buf.readUnsignedByte();String data=buf.readString(24000);
             server.execute(()->acceptResponse(player,id,phase,action,data));
@@ -254,21 +254,23 @@ public final class ServerBenchmark {
             return snapshot;
         }
         void checkpoint(){try{BenchmarkRecovery.atomic(checkpoint,GSON.toJson(report));}catch(Exception e){throw new IllegalStateException("Could not write benchmark checkpoint",e);}}
-        void finish(String reason) {
+        void finish(String reason){finish(reason,player());}
+        void finish(String reason,ServerPlayerEntity recovering) {
             if(ending)return;ending=true;
             try { if(phase>=0 && phase<results.size() && (results.get(phase).get("status").equals("warming_up") || results.get(phase).get("status").equals("measuring")))completeStage(reason); }
             catch(Exception e){SmoothFix.LOGGER.error("Could not finalize benchmark phase",e);}
             report.put("status",reason);report.put("elapsedSeconds",(System.nanoTime()-started)/1e9);
             try {report.put("memoryAtEnd",MemoryReport.snapshot("server"));send(0);}
             catch(Exception e){SmoothFix.LOGGER.error("Could not notify benchmark client",e);}
-            ServerPlayerEntity p=player();
+            ServerPlayerEntity p=recovering;
             if(p!=null) {
-                boolean restored=BenchmarkRecovery.restore(p);report.put("playerRestored",restored);
+                boolean restored=BenchmarkRecovery.restore(p);report.put("playerRestored",restored);report.put("recoveryVerification",BenchmarkRecovery.lastVerification(owner));
                 try {p.sendMessage(Text.literal("Smooth Fix benchmark "+reason+". Server report: "+checkpoint.toAbsolutePath()),false);}catch(Exception ignored){ }
             }
             for(MobEntity actor:actors)actor.discard();actors.clear();
             try {clean(server.getWorld(ARENA));clean(server.getWorld(TERRAIN));clean(server.getWorld(LUNAR));BloodMoonAdapter.reset(server.getWorld(LUNAR));}
             catch(Exception e){SmoothFix.LOGGER.error("Could not clean benchmark entities",e);}
+            report.put("terminationReason",reason);report.put("summary",BenchmarkOutcome.counts(results));if(reason.equals("completed"))report.put("status",BenchmarkOutcome.status(results));BenchmarkFinalization.send(p,id,report,this::checkpoint);
             try {checkpoint();SmoothFix.LOGGER.info("Smooth Fix benchmark {}: {}",reason,checkpoint.toAbsolutePath());}
             catch(Exception e){SmoothFix.LOGGER.error("Could not save final benchmark checkpoint",e);}
             finally {if(measuring){ServerDiagnostics.finishRecording();measuring=false;}completed=this;completedAt=System.nanoTime();active=null;}

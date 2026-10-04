@@ -1,17 +1,12 @@
-Smooth Fix 1.0.5 / build 1.0.5-perf-r2-advanced1
+Smooth Fix 1.0.5 / build 1.0.5-perf-r2-advanced4
 
-This source contains the advanced real-world benchmark patch.
-Run on the project machine with JDK 21:
-  .\gradlew clean build
+Main JAR built with Gradle 9.6.1 / official Loom 1.17.21 / JDK 21.
+Output remains Java 17 bytecode. Public version remains 1.0.5-1.20.1.
+Build on PC: .\gradlew clean build
+Main mod: build/libs/smooth_fix-1.0.5-1.20.1.jar
 
-Expected distributable after a successful build:
-  build/libs/smooth_fix-1.0.5-1.20.1.jar
-
-Important: the JAR recovered alongside the old perf-r2 source predates this advanced patch and must NOT be renamed/reused as the advanced build.
-
-Local isolated-session checks completed:
-- AdvancedStagePlanCheck PASS (9/9 transitions in order)
-- parser-level javac syntax scan: no syntax errors in new runtime files
-- exact Yarn 1.20.1 APIs and EMI 1.1.24 API/source reviewed for the new calls
-
-A full Loom build could not be run in this isolated container because the Gradle wrapper distribution/dependency network is unavailable and there is no local Gradle cache.
+Use the same main JAR on client and server. Verification-only JARs are isolated
+internal test tools and are excluded from the delivered mod.
+See VALIDATION.json and VALIDATION_OUTPUT.txt for current evidence and limits.
+The build host uses a local Loom socket-probe workaround; distributed Gradle
+configuration retains the official plugin and contains no host workaround.

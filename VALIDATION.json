@@ -1,158 +1,284 @@
 {
-  "version": "1.0.5-1.20.1",
-  "build": "Advanced source patched in isolated session; full Loom build not rerun because Gradle distribution/dependency network is unavailable here. Previous perf-r2 baseline build had passed Gradle 9.6.1 / Loom 1.17.21 / JDK 21.",
-  "build_host": "Linux; build-only local Loom native socket probe disabled for this restricted host. Distributed Gradle files retain official Loom 1.17.21. Runtime fixtures disable native Netty transport for host compatibility only.",
+  "date": "2026-10-04",
+  "public_version": "1.0.5-1.20.1",
+  "build_revision": "1.0.5-perf-r2-advanced4",
+  "build": "PASS Gradle 9.6.1 / Loom 1.17.21 / JDK 21; main JAR and verification fixture remapped",
+  "build_host_note": "Local cached Loom socket probe workaround for host restrictions only. Distributed Gradle files retain official Loom configuration.",
   "bytecode_java_version": 17,
-  "unchanged_original_client_mixin_sources": [
+  "verification_classes_in_main_jar": false,
+  "jar_sha256": "d7043bfc9d9eca62e61cce9663d59c255081f95e5ea615050930c92c67cccfcc",
+  "report_writer_check": "PASS one client file for 21 stage checkpoints; failure aggregation; retained timeout samples; late server outcome and recovery update; pending/skipped never silently pass",
+  "navigation_tests": "Native collision geometry and production follower drive simulated vanilla player travel in a server fixture; headless native keyboard with toggle key bindings. No graphical client path traversal in full user pack.",
+  "structure_ring_check": "PASS expanding 10000/20000/30000/40000/50000/60000-block bands; exact boundary ownership; 6561 unique region cells; negative coordinates and world-edge overflow",
+  "structure_search_fixture": {
+    "world_data_pack": "Verification-only untagged village replacement in minecraft:villages structure set; native vanilla plains village definition, unrelated outpost registry entry excluded",
+    "resolved_targets": [
+      "minecraft:village_plains",
+      "minecraft:village_desert",
+      "minecraft:village_savanna",
+      "minecraft:village_snowy",
+      "minecraft:village_taiga",
+      "smoothfix_fixture:replacement"
+    ],
+    "located": "smoothfix_fixture:replacement",
+    "search_progress": {
+      "radiusStepBlocks": 10000,
+      "regionsChecked": 12,
+      "candidateChunksChecked": 12,
+      "chunkRequestPending": false,
+      "elapsedMs": 2846.228312,
+      "completedRadiusBlocks": 0,
+      "radiusBlocks": 10000
+    }
+  },
+  "server_checks": [
+    "advanced startup tolerates 45 seconds without client readiness",
+    "eight actual-world stages complete; native chest + Lootr loot, inventory swap, accepted combat damage, TNT explosion and world save observed",
+    "village structure-set replacement without vanilla village tag is resolved; unrelated outpost excluded; CTOV-style and Integrated-style village IDs recognized",
+    "production ground follower drives native player travel around a two-block wall to target without jump spam; real displacement and distance recorded",
+    "production follower climbs one-block platform through native jump/travel with bounded jump pulses",
+    "native ground collision path detours around tall wall; one-block step and half-slab recognized; low ceiling, pit, lava and unavailable chunks rejected without chunk loading",
+    "actual seeded village candidate bands at 10000, 20000 and 30000 blocks match exhaustive region reference without gaps or duplicate candidate checks",
+    "original missing-village skip with empty structure map retains recording, continues to panorama and restores player without NullPointerException",
+    "unregistered structure skip safely advances to next stage",
+    "optional mod structure search exceeding 90 seconds skips explicitly and continues; mandatory village search remains unlimited",
+    "walking stages use grounded protected survival; stop restores original abilities and player state",
+    "structure search older than 120 seconds remains active with heartbeat; native asynchronous request links; stop releases candidate ticket and restores player",
+    "End transition control precedes respawn; stale abort rejected and intentional stale-phase stop restores inventory",
+    "advanced loading timeout restores full inventory and original player state",
+    "all 21 default advanced server transitions completed or explicitly skipped; client responses simulated; native terrain, actors, dimensions, weather and save exercised",
+    "advanced heartbeat timeout cleans actors and restores player/environment",
+    "disconnect callback restores inventory/hotbar and original player state"
+  ],
+  "headless_client_checks": [
+    "benchmark startup waits for world/screen/focus, starts once, resets per stage, and rejects later interruptions",
+    "production client ModelPart: 1000 rotations/pivots/scales matched vanilla",
+    "production MinecraftClient frame timing mixin applied",
+    "final client main worker parallelism=2",
+    "client benchmark packets, tick controller and command registration linked",
+    "structure-search progress extends preparation grace without starting client workload",
+    "production KeyBinding mixin drives native KeyboardInput for 60 ticks without sticky sneak/jump; neutral preparation clears input; inactive physical toggle and auto-jump option state preserved; route validation rejects 4.6-block stall and wall oscillation",
+    "actual EMI RecipeScreen/WidgetGroup/SlotWidget objects reject wrong output, input-only slot and stale recipe; accept matching recipe/output; no graphical render claimed",
+    "completed client report remains completed after disconnect and subsequent run",
+    "advanced UI mixin classes link; actual EMI accepted/stale result hooks; inventory validation rejects attempts without observed swap/tooltip; stage preparation gate",
+    "production Saints Dragons Skyfall class transformed",
+    "actual transformed TC Layer: 1000 snapshot/order/mutation cases; immutable entries, null rejection, eager fresh values",
+    "production TC Layer regex redirect preserves result"
+  ],
+  "full_server_stage_outcomes": [
+    {
+      "phase": 0,
+      "name": "real_world_panorama",
+      "mode": "panorama",
+      "status": "passed",
+      "native_server_validation": "see_stage_context_and_client_actions"
+    },
+    {
+      "phase": 1,
+      "name": "loaded_terrain_route",
+      "mode": "route",
+      "status": "passed",
+      "native_server_validation": "see_stage_context_and_client_actions"
+    },
+    {
+      "phase": 2,
+      "name": "new_terrain_route",
+      "mode": "cold_route",
+      "status": "passed",
+      "native_server_validation": "feature_generation_observed"
+    },
+    {
+      "phase": 3,
+      "name": "revisit_same_terrain",
+      "mode": "route",
+      "status": "passed",
+      "native_server_validation": "see_stage_context_and_client_actions"
+    },
+    {
+      "phase": 4,
+      "name": "real_village",
+      "mode": "structure",
+      "status": "passed",
+      "native_server_validation": "structure_start_loaded"
+    },
+    {
+      "phase": 5,
+      "name": "natural_chest_or_fixture",
+      "mode": "chest",
+      "status": "passed",
+      "native_server_validation": "native_open_and_loot_received"
+    },
+    {
+      "phase": 6,
+      "name": "lootr_personal_chest",
+      "mode": "lootr",
+      "status": "passed",
+      "native_server_validation": "native_open_and_loot_received"
+    },
+    {
+      "phase": 7,
+      "name": "inventory_open_tooltips",
+      "mode": "inventory",
+      "status": "passed",
+      "native_server_validation": "inventory_changes_observed"
+    },
+    {
+      "phase": 8,
+      "name": "emi_query_latency",
+      "mode": "emi_search",
+      "status": "passed",
+      "native_server_validation": "see_stage_context_and_client_actions"
+    },
+    {
+      "phase": 9,
+      "name": "emi_recipe_navigation",
+      "mode": "emi_recipe",
+      "status": "passed",
+      "native_server_validation": "see_stage_context_and_client_actions"
+    },
+    {
+      "phase": 10,
+      "name": "terrain_combat_32",
+      "mode": "combat",
+      "status": "passed",
+      "native_server_validation": "player_damage_accepted"
+    },
+    {
+      "phase": 11,
+      "name": "terrain_effects_64",
+      "mode": "effects",
+      "status": "passed",
+      "native_server_validation": "native_status_effects_observed"
+    },
+    {
+      "phase": 12,
+      "name": "native_blood_moon",
+      "mode": "bloodmoon",
+      "status": "passed",
+      "native_server_validation": "event_active_observed"
+    },
+    {
+      "phase": 13,
+      "name": "terrain_wither_10",
+      "mode": "wither",
+      "status": "passed",
+      "native_server_validation": "native_explosions_observed"
+    },
+    {
+      "phase": 14,
+      "name": "terrain_tnt_16",
+      "mode": "tnt",
+      "status": "passed",
+      "native_server_validation": "native_explosion_and_terrain_destruction_observed"
+    },
+    {
+      "phase": 15,
+      "name": "native_block_breaks",
+      "mode": "break",
+      "status": "passed",
+      "native_server_validation": "native_block_break_observed"
+    },
+    {
+      "phase": 16,
+      "name": "rain_and_particles",
+      "mode": "weather",
+      "status": "passed",
+      "native_server_validation": "native_rain_observed"
+    },
+    {
+      "phase": 17,
+      "name": "real_world_teleports",
+      "mode": "teleport",
+      "status": "passed",
+      "native_server_validation": "native_teleports_observed"
+    },
+    {
+      "phase": 18,
+      "name": "nether_terrain",
+      "mode": "nether",
+      "status": "passed",
+      "native_server_validation": "see_stage_context_and_client_actions"
+    },
+    {
+      "phase": 19,
+      "name": "end_terrain",
+      "mode": "end",
+      "status": "passed",
+      "native_server_validation": "see_stage_context_and_client_actions"
+    },
+    {
+      "phase": 20,
+      "name": "world_save",
+      "mode": "save",
+      "status": "passed",
+      "native_server_validation": "native_world_save_observed"
+    }
+  ],
+  "server_recovery_verification": {
+    "dimension": true,
+    "x": true,
+    "y": true,
+    "z": true,
+    "yaw": true,
+    "pitch": true,
+    "gameMode": true,
+    "flying": true,
+    "allowFlying": true,
+    "invulnerable": true,
+    "flySpeed": true,
+    "walkSpeed": true,
+    "inventory": true,
+    "selectedHotbarSlot": true,
+    "health": true,
+    "hunger": true,
+    "experience": true,
+    "all": true
+  },
+  "environment_restored": true,
+  "headless_fixture_mods": [
+    "Corgilib-Fabric-1.20.1-4.0.3.5.jar",
+    "Data_Anchor-fabric-1.20.1-1.0.0.23.jar",
+    "Enhanced-Celestials-2-Core-Fabric-1.20.1-1.0.3.3.jar",
+    "Enhanced-Celestials-2-Default-Lunar-Events-Fabric-1.20.1-1.0.0.6.jar",
+    "Patchouli-1.20.1-85-FABRIC.jar",
+    "Pehkui-3.8.3+1.14.4-1.21.jar",
+    "accessories-fabric-1.0.0-beta.48+1.20.1.jar",
+    "accessories_tclayer-3.8.1-beta.14+1.20.1.jar",
+    "bewitchment-1.20-10.jar",
+    "cardinal-components-api-5.2.3.jar",
+    "cloth-config-11.1.118-fabric.jar",
+    "ebe.jar",
+    "fabric-api-0.92.12+1.20.1.jar",
+    "geckolib-fabric-1.20.1-4.8.4.jar",
+    "lootr.jar",
+    "owo-lib-0.11.2+1.20.jar",
+    "saintsdragons-0.9.85+fabric-1.20.1.jar",
+    "shut-up-mcd-1.2.0.jar",
+    "smooth_fix-1.0.5-1.20.1.jar",
+    "threadtweak-reforged-1.0.0.jar"
+  ],
+  "untested": [
+    "Full 515-mod graphical gameplay/FPS on user hardware",
+    "Graphical inventory/recipe rendering on user hardware",
+    "Real TCP client/server recovery acknowledgement",
+    "Graphical ground movement/HUD in complete user modpack",
+    "Actual PlayerAbilityLib 1.8.0 grant/restore integration in complete user modpack",
+    "Actual CTOV/Integrated Villages JARs in the complete user modpack",
+    "Optional automatically selected mod structures",
+    "Android"
+  ],
+  "limits": [
+    "Server fixture simulates client responses and advances timestamps. Full suite uses reduced actor counts: combat/effects/Blood Moon four, Wither one, TNT one. Default user workloads remain 32/64/64/10/16.",
+    "Headless EMI recipe verification uses real EMI screen/page/slot classes with constructed state; it does not open a game window or measure render/GPU performance.",
+    "Village registry replacement is verified with a controlled data pack, not the full user CTOV/Integrated/MVS runtime.",
+    "Server recovery compares vanilla inventory including armor/offhand, hotbar, location, game mode, movement abilities, health, hunger and XP. Arbitrary mod capabilities, terrain, loot and advancements are outside player rollback.",
+    "Client recovery packet handling exists; a real connected graphical peer is still needed to confirm both-side acknowledgement.",
+    "No guarantee of 120 FPS, 4 GB RAM, or unchanged process memory follows from these fixtures."
+  ],
+  "existing_compatibility_mixin_sources_unchanged": [
     "EmiRepairIngredientMixin.java",
     "ObscureTooltipFoodMixin.java",
     "TumbleweedClientInitMixin.java",
     "EmiCompatPluginMixin.java"
-  ],
-  "metadata_check": "Actual upstream mod metadata parsed by Fabric Loader 0.19.5; client mixin configs, entrypoints and server-loaded mod environments preserved.",
-  "server_tests": [
-    "Loom development server reached Done with original EBE 0.13.2 + Shut Up MCD 1.2.0 + Fabric API 0.92.12",
-    "Production remapped JAR reached Done with Fabric server launcher 1.1.2, Loader 0.19.5, MC 1.20.1, Java 21",
-    "Invalid yaw/pitch infinity summon test produced one caller trace and two invalid-input counters",
-    "Finite entity orientation was queried after invalid rotation test",
-    "Server memory report and 10-second slow-tick profile were written",
-    "Servers stopped and saved worlds cleanly",
-    "Performance revision production server stopped and saved its isolated world cleanly"
-  ],
-  "other_mod_jar_rewritten": false,
-  "mod_environment_changed": false,
-  "mod_list_changed": false,
-  "gameplay_content_removed": false,
-  "client_visual_runtime_tested": false,
-  "android_tested": false,
-  "pocketmc_windows_tested": false,
-  "full_modpack_performance_tested": false,
-  "client_total_4gb_confirmed": false,
-  "server_total_2gb_confirmed": false,
-  "sources": [
-    "https://github.com/FabricMC/fabric-loader/tree/0.19.5",
-    "https://modrinth.com/mod/shut-up-mcd/version/YFaYYTrw",
-    "https://modrinth.com/mod/ebe-reloaded",
-    "https://docs.oracle.com/en/java/javase/21/vm/native-memory-tracking.html"
-  ],
-  "build_revision": "1.0.5-perf-r2-advanced1",
-  "observed_new_logs": {
-    "client": "latest(2).log",
-    "server": "latest(3).log",
-    "server_cant_keep_up": 9,
-    "maximum_lag_ms": 25724,
-    "movement_warnings": 4,
-    "movement_warning_context": "all4 immediately after an explicit /tp"
-  },
-  "confirmed_120fps_fullpack": false,
-  "unchanged_process_ram_confirmed": false,
-  "client_profiler_graphical_runtime_tested": false,
-  "changes_gameplay_tick_frequency": false,
-  "changes_move_speed_thresholds": false,
-  "silences_overload_warnings": false,
-  "threadtweak_reforged_tested": true,
-  "fixture_notes": [
-    "On reuse of an older test world, truncated/wrong-location chunk warnings were observed. Cause not established. A fresh isolated world roundtrip was validated separately. Full pack world integrity remains unverified."
-  ],
-  "r1_validation_history": [
-    "100000 randomized position/normal rotation cases: max absolute error 0.0000038146973; translations bit-identical; run with both JOML FMA configurations",
-    "ASM verifier passed for rewritten actual MC 1.20.1 ModelPart; transformation idempotence and changed-expression fallback passed",
-    "Production KnotClient headless class fixture: 1000 actual transformed ModelPart pivots/rotations/nonuniform scales matched vanilla",
-    "Production MinecraftClient class verification confirms frame start/end-work hooks applied",
-    "Production server: valid confirmed teleport rebased origin, wrong confirmation did not rebase, ordinary movement accepted, excessive movement rejected",
-    "Production server main worker pool parallelism observed at 2; compensation pool size can exceed parallelism",
-    "Revised server profile wrote JSON with threshold50ms/interval10ms, initial memory and tick counters",
-    "Both import archives retain all403 original projectID/fileID references and exact original content/config asset bytes outside explicit changes",
-    "Actual original-export ThreadTweak Reforged 1.0.0 (CF1274735/file7941013) tested in production client and server; both vanilla/replacement constructors patched, final main pool parallelism2 verified",
-    "Worker-construction original bytecode rewrite passes ASM verifier and idempotence check",
-    "Fresh world save/flush/restart/stop roundtrip with ThreadTweak Reforged: 2025 chunk payloads and NBT coordinates validated before restart; no reload storage warnings",
-    "Invalid model-angle NaN/+Infinity/-Infinity fallback matches vanilla JOML position/normal matrices"
-  ],
-  "performance_tests": [
-    "10000 randomized sigil lookups equal BlockPos.findClosest; bounds, ties, duplicates and stale positions, empty list and oversized fallback verified",
-    "10007 regex cases match Java String.replaceAll, including line endings and replacement behavior",
-    "100000 timing samples have exact whole-session totals with bounded percentile reservoir; late hot stacks retained with correct estimate/error bounds",
-    "Actual Bewitchment 1.20-10 and Saints Dragons 0.9.85 ASM fixtures: basic stack verifier, idempotence and modified-upstream fallback",
-    "Production client class fixture with Bewitchment, Saints Dragons, Accessories TC Layer and ThreadTweak: 1000 model transforms, frame hooks, final worker budget=2, client benchmark/network/commands linked, Skyfall patch transformed and regex redirect verified",
-    "Production server fixture: all ten automatic stages complete, including Enhanced Celestials 2 Blood Moon verified active; real 10 Withers spawn; stop and heartbeat timeout clean actors and restore owner",
-    "Persisted recovery journal restores dimension, location, mode and movement abilities",
-    "Chunk entity-load cleanup deferred outside callback; final production fixture stops and saves all six dimensions without ConcurrentModificationException",
-    "Production fixture world restart repeats all ten stages and cleanly saves all six dimensions; no truncated/wrong-location chunk warnings"
-  ],
-  "runtime_fixture_limitations": "Headless server fixture advances benchmark timestamps and simulates client readiness/heartbeat to verify logic. It does not measure full-duration performance or exercise a graphical client route. Production client tests exit before opening a GL window.",
-  "graphical_automatic_benchmark_tested": false,
-  "benchmark_world_isolation": "Three reserved dimensions in the existing save, not a separate save. Mod-global side effects are not rolled back.",
-  "entire_mod_ability_suite_implemented": false,
-  "benchmark_controller": "Deterministic flight/movement/camera/nearby attack script; feature mob spawning command; no general AI agent",
-  "benchmark_stages": [
-    "baseline",
-    "village_32",
-    "mobs_16",
-    "mobs_32",
-    "mobs_64",
-    "positive_effects_64",
-    "blood_moon",
-    "wither_10",
-    "teleport",
-    "exploration"
-  ],
-  "jar_sha256": "56749478571525d27c5270cee09454a12c876c04751dbbc194765314a3de038b",
-  "loading_hotfix_tests": [
-    "Startup gate waits through command/loading screen, incorrect dimension and unfocused initial window; readiness acknowledged only once; each new stage starts with a fresh gate; interruptions after readiness abort",
-    "Production headless client fixture executes startup regression and links benchmark controller/packet registration",
-    "Production server fixture simulates 45 seconds of initial loading without heartbeat or premature cancellation, verifies all ten stages, operator stop, post-readiness heartbeat timeout, 120-second startup timeout, player recovery and clean world save"
-  ],
-  "transition_hotfix_tests": [
-    "Production server fixture captures outgoing packet calls and verifies stage control precedes vanilla dimension respawn at phases 6, 7 and 9",
-    "Injecting an old-phase automatic abort through the actual response handler leaves the new Blood Moon stage active",
-    "Intentional client stop applies across stage transition even with a stale phase",
-    "All ten stages complete, including active Enhanced Celestials Blood Moon, Withers, timeout/cleanup/recovery and clean save",
-    "Production headless client class fixture links revised controller and executes startup readiness regression"
-  ],
-  "transition_packet_fixture_note": "Outbound packet order captured by RecordingConnection in the headless server fixture. It simulates client readiness and advances test timestamps; no graphical client route or real TCP packet roundtrip was exercised.",
-  "review_input": {
-    "run_id": "17594b0d-8b98-49e9-a300-3f6d3a906dc6",
-    "build": "1.0.5-perf-r2-hotfix2",
-    "server_reports": 1,
-    "client_reports": 10,
-    "status": "completed",
-    "player_restored": true,
-    "blood_moon_active": true,
-    "elapsed_seconds": 714.6389,
-    "max_callback_tick_ms": 320.094,
-    "exploration_old_gc_counter_delta_ms": 439,
-    "note": "User-supplied actual graphical run of previous build; no before/after controlled comparison; current review revision graphical performance remains untested."
-  },
-  "review_tests": [
-    "Actual TC Layer beta.14 entrySet ASM basic verifier, idempotence and changed-collector fallback",
-    "Production headless client and server: 1000 actual transformed-map cases each match original results/order, eager snapshot refresh and immutable/null behavior",
-    "JDK21 helper microbenchmark, 24 elements x 100000 calls x 3: original 2216-2265 bytes/call vs revised 2032; no fullpack FPS improvement inferred",
-    "Java17 helper microbenchmark also confirms lower allocation; classes remain bytecode61",
-    "Synthetic 439ms outside-callback stall retained as 489ms start interval; per-collector name-matched deltas",
-    "Production fixture: 10 stages complete, real Blood Moon active, per-stage entity totals reconcile with types, loaded chunk counters, cadence and GC deltas populated",
-    "Production fixture: packet ordering, stale abort rejection, intentional stop, loading/heartbeat timeouts, player recovery and final clean world save"
-  ],
-  "advanced_worldgen_lootr_inventory_emi_suite_implemented": true,
-  "server_save_gc_spikes_proven_eliminated": false,
-  "xaero_opengl_stall_root_cause_proven": false,
-  "advanced_benchmark_stages": [
-    "real_terrain_loaded",
-    "cold_chunk_generation",
-    "structure_scan",
-    "vanilla_chest_loot",
-    "lootr_chest_loot",
-    "inventory_hotbar",
-    "emi_search_recipe",
-    "combat_hit",
-    "tnt_destruction"
-  ],
-  "advanced_patch_validation": {
-    "stage_transition_fixture": "PASS: all 9 stages reached exactly once in order and terminated",
-    "recovery": "Full PlayerInventory NBT + selected slot + dimension/location/rotation + gamemode + flying/allowFlying/invulnerable + fly/walk speeds; explicit handled-screen close, inventory handler sync and UpdateSelectedSlotS2CPacket; post-restore equality map written to final report.",
-    "combat": "Mixin observes only LivingEntity.damage calls whose return value is true; server further requires benchmark-owner attacker and benchmark target tag.",
-    "emi": "Reflective EMI 1.1.24 API contract: non-empty index + recipe manager, search(crafting), wait searchThread=null, non-empty results, crafting_table stack, displayRecipes, RecipeScreen verification.",
-    "full_runtime_build_in_this_session": false,
-    "reason": "No Gradle 9.6.1 distribution/cache is available in the isolated container and outbound DNS for the wrapper is blocked."
-  },
-  "jar_sha256_note": "jar_sha256 below belongs to the previously validated perf-r2 baseline JAR, not the new advanced source patch; do not distribute it as the advanced build."
+  ]
 }

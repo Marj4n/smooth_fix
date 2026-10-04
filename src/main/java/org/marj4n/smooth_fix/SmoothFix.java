@@ -12,7 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class SmoothFix implements ModInitializer {
     public static final String MOD_ID = "smooth_fix";
     public static final String MOD_NAME = "Smooth Fix";
-    public static final String BUILD_ID = "1.0.5-perf-r2-advanced1";
+    public static final String BUILD_ID = "1.0.5-perf-r2-advanced4";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_NAME);
 
     private static final Set<String> LOGGED_PATCHES = ConcurrentHashMap.newKeySet();

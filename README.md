@@ -1,10 +1,27 @@
+# Smooth Fix 1.0.5 — Advanced4
+
+Real-world benchmark suite with one client report per run, observed action counters, fixed-duration pressure, verified recovery, and explicit failed/skipped outcomes. Install the same build on client and server, then use `/smoothfix stress advanced start world-copy` in a disposable copy of the actual modpack save. Full usage and measurement limits: `PANDUAN_STRESS_TEST.txt`. Public mod version remains 1.0.5.
+
+Village and other structure searches expand from the stage-start player position in
+10,000-block bands (10,000 → 20,000 → 30,000 → …), using one native asynchronous
+candidate chunk request at a time. Missing/unavailable structures safely skip to the
+next stage. Progress renews client preparation grace; stop releases the search ticket.
+The search can still add native generation load. See the guide for status/config.
+
+Advanced4 replaces the flight/height key loop with bounded ground navigation, native
+collision-shape detours, step-only jump pulses and stall replanning. It overrides
+benchmark input at key reads to preserve physical/toggle state. A stage HUD and chat
+messages explain preparation, search, workload time and the next stage. Route
+validation requires meaningful horizontal travel; automatically selected mod
+structures run after core coverage and have a separate 90-second search budget.
+
 # Smooth Fix
 
 Targeted compatibility, stability and measured performance work for Smooth Odyssey on Fabric 1.20.1.
 
 ## 1.0.5 benchmark review revision
 
-Current build: `1.0.5-perf-r2-review1`; public version remains **1.0.5-1.20.1**.
+Historical review build: `1.0.5-perf-r2-review1`. Current build: `1.0.5-perf-r2-advanced4`; public version remains **1.0.5-1.20.1**.
 Review of one completed graphical user run (server + ten client reports) found
 render/accessory overhead and a gap in server timing coverage; see
 `REVIEW_BENCHMARK_20261004.md` for the evidence and limits.
@@ -25,8 +42,7 @@ render/accessory overhead and a gap in server timing coverage; see
   live requested actors/opponents and player position at measurement boundaries.
   These snapshots do not measure newly generated chunks or stage peaks.
 - Reports explicitly identify flat-arena limitations and untested structures,
-  Lootr/chests, inventory and EMI latency. Advanced real-world benchmarks are
-  still pending. Arena results cannot certify whole-modpack gameplay performance.
+  Lootr/chests, inventory and EMI latency. Those were limitations of the historical arena build; Advanced2 adds actual-world stages. Arena results cannot certify whole-modpack gameplay performance.
 
 Replace the JAR on both sides and restart. Existing perf_r2 PC/server import
 ZIPs contain the older JAR; replace it with this one after importing.

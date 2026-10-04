@@ -16,7 +16,17 @@ public final class ClientFrameProfiler {
 
     public static boolean start(MinecraftClient client, int seconds) {
         if (active != null || client.world == null) return false;
-        Recording recording = new Recording(client, seconds);
+        return start(client, seconds, true);
+    }
+
+    /** Benchmark controllers own completion and consume the retained recording, including timeout data. */
+    public static boolean startBenchmark(MinecraftClient client, int seconds) {
+        return start(client, seconds, false);
+    }
+
+    private static boolean start(MinecraftClient client, int seconds, boolean automaticSave) {
+        if (active != null || client.world == null) return false;
+        Recording recording = new Recording(client, seconds, automaticSave);
         active = recording;
         Thread thread = new Thread(recording, "Smooth Fix Frame Sampler");
         thread.setDaemon(true);
@@ -28,7 +38,7 @@ public final class ClientFrameProfiler {
         Recording r = active;
         if (r == null) return;
         long now = System.nanoTime();
-        if (r.previousStart != 0) r.intervals.add(now - r.previousStart);
+        if (r.previousStart != 0){r.intervals.add(now - r.previousStart);r.timeline.add(now-r.started,now-r.previousStart,false);}
         r.previousStart = now;
         r.frameStart = now;
         r.working = true;
@@ -40,6 +50,7 @@ public final class ClientFrameProfiler {
         long elapsed = System.nanoTime() - r.frameStart;
         r.working = false;
         r.work.add(elapsed);
+        r.timeline.add(System.nanoTime()-r.started,elapsed,true);
     }
 
     public static boolean isActive() { return active != null; }
@@ -56,6 +67,10 @@ public final class ClientFrameProfiler {
         scene.put("simulationDistance", client.options.getSimulationDistance().getValue());
         scene.put("fpsLimit", client.options.getMaxFps().getValue());
         scene.put("vsync", client.options.getEnableVsync().getValue());
+        scene.put("particlesSetting",client.options.getParticles().getValue().toString());
+        scene.put("graphicsMode",client.options.getGraphicsMode().getValue().toString());
+        scene.put("entityDistanceScaling",client.options.getEntityDistanceScaling().getValue());
+        scene.put("biomeBlendRadius",client.options.getBiomeBlendRadius().getValue());
         scene.put("framebufferWidth", client.getWindow().getFramebufferWidth());
         scene.put("framebufferHeight", client.getWindow().getFramebufferHeight());
         if (client.world != null) scene.put("dimension", client.world.getRegistryKey().getValue().toString());
@@ -67,9 +82,11 @@ public final class ClientFrameProfiler {
         private final MinecraftClient client;
         private final Thread renderThread = Thread.currentThread();
         private final int seconds;
+        private final boolean automaticSave;
         private final TimingSamples intervals = new TimingSamples(8_333_333L);
         private final TimingSamples work = new TimingSamples(8_333_333L);
         private final StackSamples stacks = new StackSamples();
+        private final FrameTimeline timeline = new FrameTimeline();
         private final Map<String, Object> sceneStart;
         private final Map<String, Object> memoryStart;
         private final long started = System.nanoTime();
@@ -79,7 +96,8 @@ public final class ClientFrameProfiler {
         private volatile boolean working;
         private volatile boolean stop;
 
-        private Recording(MinecraftClient client, int seconds) {
+        private Recording(MinecraftClient client, int seconds, boolean automaticSave) {
+            this.automaticSave = automaticSave;
             this.client = client;
             this.seconds = seconds;
             this.sceneStart = scene(client);
@@ -89,7 +107,7 @@ public final class ClientFrameProfiler {
         @Override public void run() {
             long deadline = System.nanoTime() + seconds * 1_000_000_000L;
             try {
-                while (!stop && System.nanoTime() < deadline && client.isRunning()) {
+                while (!stop && (!automaticSave || System.nanoTime() < deadline) && client.isRunning()) {
                     long start = frameStart;
                     if (working && System.nanoTime() - start > 8_333_333L) {
                         StackTraceElement[] trace = renderThread.getStackTrace();
@@ -99,7 +117,7 @@ public final class ClientFrameProfiler {
                     }
                     LockSupport.parkNanos(10_000_000L);
                 }
-                client.execute(() -> finish(true));
+                if (automaticSave) client.execute(() -> finish(true));
             } catch (Exception exception) {
                 if (active == this) active = null;
                 SmoothFix.LOGGER.error("Could not sample client frames", exception);
@@ -118,6 +136,8 @@ public final class ClientFrameProfiler {
             report.put("elapsedSeconds", (System.nanoTime()-started)/1_000_000_000.0);
             report.put("frameIntervals", intervals.snapshot());
             report.put("frameWorkBeforePresent", work.snapshot());
+            report.put("frameTimeline",timeline.snapshot());
+            report.put("frameTimelineNote","Exact 1-second totals, up to 600 seconds, assigned by sample completion time. Includes loading/preparation in advanced stages. Empty buckets can indicate a long stall; no per-second percentiles or GPU measurements.");
             report.put("sampler", Map.of("requestedSeconds",seconds,"intervalMs",10,"thresholdMs",8.333333));
             report.put("slowFrameStacks", stacks.snapshot());
             report.put("measurementNote", "Entire recording totals; percentile reservoir is bounded to 8192. Work excludes presentation/FPS waits. Intervals include waits. GPU time is not measured. Sampling adds overhead. Stack estimates include error bounds; observations are not CPU percentages.");

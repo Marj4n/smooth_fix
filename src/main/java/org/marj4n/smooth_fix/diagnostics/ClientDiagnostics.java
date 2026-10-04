@@ -16,7 +16,7 @@ public final class ClientDiagnostics implements ClientModInitializer {
         if (SmoothFixConfig.get().saintsDragonEntityScanFix && net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("saintsdragons")) org.marj4n.smooth_fix.performance.RelevantDragonEntities.install();
         if (!SmoothFixConfig.get().diagnostics) return;
         org.marj4n.smooth_fix.benchmark.ClientBenchmark.install();
-        org.marj4n.smooth_fix.benchmark.AdvancedClientBenchmark.install();
+        org.marj4n.smooth_fix.benchmark.AdvancedClient.install();
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
                 ClientCommandManager.literal("smoothfixc").then(ClientCommandManager.literal("report").executes(context -> {
                     try {
@@ -33,7 +33,7 @@ public final class ClientDiagnostics implements ClientModInitializer {
                                 .executes(context -> profile(context.getSource(), 120))
                                 .then(ClientCommandManager.argument("seconds", IntegerArgumentType.integer(10,120))
                                         .executes(context -> profile(context.getSource(), IntegerArgumentType.getInteger(context,"seconds")))))
-                        .then(ClientCommandManager.literal("stopstress").executes(context -> { MinecraftClient client=MinecraftClient.getInstance(); if(!org.marj4n.smooth_fix.benchmark.AdvancedClientBenchmark.stop(client)) org.marj4n.smooth_fix.benchmark.ClientBenchmark.stop(client); return 1; }))
+                        .then(ClientCommandManager.literal("stopstress").executes(context -> { org.marj4n.smooth_fix.benchmark.ClientBenchmark.stop(MinecraftClient.getInstance()); return 1; }))
                         .then(ClientCommandManager.literal("stopprofile").executes(context -> {
                             ClientFrameProfiler.stop();
                             context.getSource().sendFeedback(Text.literal("Smooth Fix frame profile will be saved."));

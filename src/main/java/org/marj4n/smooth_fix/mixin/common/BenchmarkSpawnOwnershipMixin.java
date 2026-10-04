@@ -10,6 +10,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class BenchmarkSpawnOwnershipMixin {
     @Inject(method="spawnEntity",at=@At("HEAD"),cancellable=true)
     private void smoothfix$ownBenchmarkSpawn(Entity entity,CallbackInfoReturnable<Boolean> cir) {
+        org.marj4n.smooth_fix.benchmark.AdvancedBenchmark.observeSpawn(entity);
         if(!ServerBenchmark.allowSpawn((ServerWorld)(Object)this,entity))cir.setReturnValue(false);
     }
 }
