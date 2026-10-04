@@ -9,8 +9,13 @@
     "BewitchmentSigilMarkerMixin",
     "TrinketGroupRegexMixin",
     "TrinketSnapshotMarkerMixin",
+    "ChunkBenchmarkTimingMixin",
+    "ServerChunkFutureAccess",
+    "FeatureBenchmarkTimingMixin",
+    "ExplosionBenchmarkMixin",
+    "BenchmarkDropOwnershipMixin",
     "BenchmarkSpawnOwnershipMixin",
-    "BenchmarkDamageCounterMixin"
+    "BenchmarkDamageMixin"
   ],
   "injectors": {
     "defaultRequire": 1

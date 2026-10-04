@@ -13,12 +13,19 @@ public final class BloodMoonAdapter {
     public static boolean available(){var loader=FabricLoader.getInstance();return loader.isModLoaded("enhancedcelestials2core") && loader.isModLoaded("enhancedcelestials2defaultlunarevents");}
     private static Object forecast(ServerWorld world)throws ReflectiveOperationException {
         if(!world.getRegistryKey().equals(ServerBenchmark.LUNAR))throw new IllegalArgumentException("Blood Moon adapter is restricted to the benchmark lunar dimension");
+        return forecastForWorld(world);
+    }
+    public static Object forecastForWorld(ServerWorld world)throws ReflectiveOperationException {
         Class<?> api=Class.forName("dev.corgitaco.enhancedcelestials2core.EnhancedCelestials");
         Optional<?> value=(Optional<?>)api.getMethod("lunarForecastWorldData",World.class).invoke(null,world);
         return value.orElseThrow(()->new IllegalStateException("Lunar forecast unavailable in benchmark dimension"));
     }
     public static void enable(ServerWorld world)throws ReflectiveOperationException {
         Object data=forecast(world);
+        enableData(world,data);
+    }
+    public static void enableInWorld(ServerWorld world)throws ReflectiveOperationException {enableData(world,forecastForWorld(world));}
+    private static void enableData(ServerWorld world,Object data)throws ReflectiveOperationException {
         Registry<Object> registry=world.getRegistryManager().get(RegistryKey.ofRegistry(new Identifier("enhancedcelestials2core","lunar/event")));
         Object event=registry.getOrEmpty(BLOOD_MOON).orElseThrow(()->new IllegalStateException("Blood Moon registry entry missing"));
         RegistryEntry<?> entry=registry.getEntry(registry.getRawId(event)).orElseThrow();
@@ -26,6 +33,10 @@ public final class BloodMoonAdapter {
     }
     public static boolean isActive(ServerWorld world)throws ReflectiveOperationException {
         Object data=forecast(world);RegistryEntry<?> event=(RegistryEntry<?>)data.getClass().getMethod("currentLunarEventHolder").invoke(data);
+        return event.matchesId(BLOOD_MOON) && (boolean)data.getClass().getMethod("isEventActive").invoke(data);
+    }
+    public static boolean isActiveInWorld(ServerWorld world)throws ReflectiveOperationException {
+        Object data=forecastForWorld(world);RegistryEntry<?> event=(RegistryEntry<?>)data.getClass().getMethod("currentLunarEventHolder").invoke(data);
         return event.matchesId(BLOOD_MOON) && (boolean)data.getClass().getMethod("isEventActive").invoke(data);
     }
     @SuppressWarnings("unchecked")

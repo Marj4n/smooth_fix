@@ -18,7 +18,7 @@ import java.util.UUID;
 /** All checks run on the real server thread against the transformed production classes. */
 public class ServerRuntimeCheck implements ModInitializer {
     @Override public void onInitialize() {
-        if(FabricLoader.getInstance().getEnvironmentType()!=EnvType.SERVER)return;
+        if(FabricLoader.getInstance().getEnvironmentType()!=EnvType.SERVER || Boolean.getBoolean("smoothfix.verify.advanced"))return;
         ServerLifecycleEvents.SERVER_STARTED.register(this::run);
     }
     private void run(MinecraftServer server) {

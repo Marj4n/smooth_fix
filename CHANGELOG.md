@@ -1,14 +1,35 @@
 # Changelog
 
 ## 1.0.5
+- Advanced4: replace flight altitude key spam with bounded ground pathfinding, collision-shape detours, short step jumps and stall replanning.
+- Override benchmark movement at key reads; preserve physical/toggle key state and keep preparation/UI input neutral.
+- Show stage purpose, search progress, remaining action time and next stage in a cached HUD; announce stage/results/recovery in chat.
+- Reject stuck/oscillating route coverage using horizontal distance, maximum displacement and progress samples.
+- Run automatically selected mod structures after core stages; skip their search explicitly after the configurable 90-second budget. Mandatory village expansion remains unlimited.
+- Advanced3: fix NullPointerException when a missing village/structure stage is skipped.
+- Search villages and registered structures in 10,000-block expanding bands from the player position at stage start.
+- Resolve village tags, mod village IDs and replacement members of active village structure sets; record resolved targets.
+- Use one native asynchronous candidate chunk request at a time; load only the selected destination fully and release search tickets on stop.
+- Report search progress/radius, renew preparation grace, and retain the full search/recording time.
+- Record controller exception context in the server report for future diagnostics.
+- Consolidated all client stages into one atomic report per run, including partial/timeout results.
+- Restored the full 21-stage actual-world suite and optional mod structures.
+- Recorded before preparation; kept each stress window running after the first successful action.
+- Fixed survival UI/observed inventory swaps, reachable containers, and nearby TNT observation on dry terrain.
+- Verified native accepted combat hits and benchmark-owned terrain destruction.
+- Added failed/skipped/pending run summaries and server/client recovery verification.
+- Kept existing performance and compatibility patches; public version stays 1.0.5.
+- Preserve completed reports across disconnects and subsequent runs.
+- Verify the requested EMI recipe and matching output on the rendered page.
+- Clear rain before forcing Blood Moon; restore original weather strengths and synchronize the original forecast.
 - Review revision: reduce repeated TC Layer eager snapshot allocations while preserving the original JDK collector and inventory semantics.
 - Add server start-to-start wall-clock intervals and delayed runnable boundary samples alongside callback tick work; report per-recording GC counter deltas.
-- Add benchmark chunk/entity/position boundary snapshots and explicit flat-world/coverage limitations. Real-world worldgen, Lootr, inventory and EMI benchmark scenarios remain pending.
+- Add benchmark chunk/entity/position boundary snapshots and explicit flat-world/coverage limitations. The former arena-only suite is retained; Advanced2 adds real-world worldgen, Lootr, inventory and EMI scenarios.
 - Benchmark transition hotfix: reset the client stage before dimension teleport, ignore automatic aborts from old phases, and preserve intentional stops across transitions.
 - Benchmark loading hotfix: wait for arena loading and command screens to close before warm-up; allow up to 120 seconds to become ready; preserve interruption detection after readiness.
 - Performance revision r2 (version stays 1.0.5): optimized Bewitchment sigil lookup, Saints & Dragons Skyfall entity lookup, and Trinkets compatibility regex allocations.
 - Added automatic `/smoothfix stress` benchmarks for villagers, mob crowds, positive effects, real Enhanced Celestials 2 Blood Moon, 10 Withers, teleport and exploration.
-- Added per-stage client/server reports, repeat/feature tests, stop/timeout cleanup and player recovery after disconnect/restart.
+- Added stage recordings, repeat/feature tests, stop/timeout cleanup and player recovery after disconnect/restart; client stage recordings now share one file per run.
 - Fixed stale benchmark entity cleanup during chunk loads to avoid mutating entity lists while worlds save.
 - Improved full-session timing statistics and retention of late profiler hotspots.
 - Performance revision r1 (public version remains 1.0.5): removes temporary quaternion construction from the verified vanilla ModelPart rotation expression, while preserving pivots, scales, normal matrices and surrounding hooks.

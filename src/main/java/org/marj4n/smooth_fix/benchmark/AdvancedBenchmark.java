@@ -1,591 +1,394 @@
 package org.marj4n.smooth_fix.benchmark;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonParser;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.SpawnReason;
-import net.minecraft.entity.TntEntity;
-import net.minecraft.entity.mob.MobEntity;
-import net.minecraft.entity.player.PlayerAbilities;
-import net.minecraft.inventory.Inventory;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.nbt.NbtList;
-import net.minecraft.registry.Registries;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.command.ServerCommandSource;
+import com.google.gson.*;
+import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.event.lifecycle.v1.*;
+import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
+import net.fabricmc.fabric.api.networking.v1.*;
+import net.minecraft.server.*;
+import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
-import net.minecraft.structure.StructureStart;
-import net.minecraft.text.Text;
-import net.minecraft.util.WorldSavePath;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.world.Heightmap;
-import net.minecraft.world.World;
-import net.minecraft.world.chunk.WorldChunk;
+import net.minecraft.registry.*;
+import net.minecraft.registry.entry.RegistryEntryList;
+import net.minecraft.registry.tag.TagKey;
+import net.minecraft.util.*;
+import net.minecraft.util.math.*;
+import net.minecraft.world.*;
+import net.minecraft.world.chunk.*;
 import net.minecraft.world.gen.structure.Structure;
+import net.minecraft.entity.*;
+import net.minecraft.entity.mob.*;
+import net.minecraft.entity.boss.WitherEntity;
+import net.minecraft.entity.projectile.ProjectileEntity;
+import net.minecraft.block.*;
+import net.minecraft.block.entity.*;
+import net.minecraft.item.*;
+import net.minecraft.nbt.*;
+import net.minecraft.text.Text;
 import org.marj4n.smooth_fix.SmoothFix;
-import org.marj4n.smooth_fix.diagnostics.MemoryReport;
-import org.marj4n.smooth_fix.diagnostics.ServerDiagnostics;
-
-import java.nio.file.Path;
+import org.marj4n.smooth_fix.diagnostics.*;
 import java.util.*;
+import java.nio.file.Path;
 
-/**
- * Real-world advanced benchmark. Unlike the legacy synthetic arenas this suite operates in the
- * owner's actual world, validates observable effects, and restores the complete player snapshot.
- */
+/** Opt-in destructive gameplay benchmark in the actual dimensions of a disposable world copy. */
 public final class AdvancedBenchmark {
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().serializeNulls().create();
-    private static Run active;
-    private static boolean installed;
-
+    private static final Gson GSON=new GsonBuilder().setPrettyPrinting().serializeNulls().create();
+    private static final String TAG="smoothfix_advanced:";
+    private static Run active,completed;
+    private static long completedAt;
+    private static final Set<Entity> stale=new HashSet<>();
     private AdvancedBenchmark() { }
+    public static boolean isRunning(){return active!=null;}
+    public static String status(){return active==null?"No advanced benchmark running.":active.phase+1+"/"+active.stages.size()+": "+active.stage.name+(active.structureSearch==null?"":"; searching radius "+active.structureSearch.radius()+" blocks");}
+    public static boolean stop(){if(active==null)return false;active.finish("stopped_by_operator");return true;}
 
     public static void install() {
-        if (installed) return;
-        installed = true;
-        ServerTickEvents.END_SERVER_TICK.register(server -> {
-            Run run = active;
-            if (run != null) {
-                try { run.tick(); }
-                catch (Throwable t) {
-                    SmoothFix.LOGGER.error("Advanced benchmark tick failed", t);
-                    run.finish("failed_runtime_exception");
-                }
-            }
-        });
-        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
-            if (active != null) active.finish("server_stopping");
-        });
-        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
-            Run run = active;
-            if (run != null && run.owner.equals(handler.player.getUuid())) run.finishWithPlayer("owner_disconnected", handler.player);
-        });
-        ServerPlayNetworking.registerGlobalReceiver(BenchmarkProtocol.ADV_RESPONSE, (server, player, handler, buf, sender) -> {
-            UUID runId = buf.readUuid();
-            int phase = buf.readInt();
-            int action = buf.readUnsignedByte();
-            String data = buf.readString(24000);
-            server.execute(() -> accept(player, runId, phase, action, data));
+        CommandRegistrationCallback.EVENT.register((dispatcher,registry,environment)->dispatcher.register(
+            CommandManager.literal("smoothfix").requires(s->s.hasPermissionLevel(2)).then(CommandManager.literal("stress")
+                .then(CommandManager.literal("advanced")
+                    .then(CommandManager.literal("start").then(CommandManager.literal("world-copy").executes(c->start(c.getSource().getPlayerOrThrow()))))
+                    .then(CommandManager.literal("status").executes(c->{c.getSource().sendFeedback(()->Text.literal(status()),false);return 1;}))
+                    .then(CommandManager.literal("stop").executes(c->stop()?1:0))
+                    .then(CommandManager.literal("list").executes(c->{try{AdvancedPlan p=AdvancedPlan.load();c.getSource().sendFeedback(()->Text.literal("Actual-world stages: "+p.stages.stream().map(s->s.name).toList()+"; auto mod structures: "+p.automaticallySelectedModStructures+". Configure smooth_fix/advanced_benchmark.json. start world-copy confirms disposable save: TNT/Withers/mining/loot permanently change terrain."),false);return 1;}catch(Exception e){c.getSource().sendError(Text.literal(e.toString()));return 0;}}))))));
+        ServerLifecycleEvents.SERVER_STARTED.register(server->AdvancedWorldRecovery.restore(server));
+        ServerLifecycleEvents.SERVER_STOPPING.register(server->{if(active!=null)active.finish("server_stopping");drain();});
+        ServerLifecycleEvents.SERVER_STOPPED.register(server->{active=completed=null;stale.clear();});
+        ServerPlayConnectionEvents.DISCONNECT.register((handler,server)->{if(active!=null && active.owner.equals(handler.player.getUuid()))active.finish("owner_disconnected",handler.player);});
+        ServerEntityEvents.ENTITY_LOAD.register((entity,world)->{for(String tag:entity.getCommandTags())if(tag.startsWith(TAG) && (active==null || !tag.equals(active.tag())))stale.add(entity);});
+        ServerEntityEvents.ENTITY_UNLOAD.register((entity,world)->stale.remove(entity));
+        ServerChunkEvents.CHUNK_LOAD.register((world,chunk)->ChunkMetrics.loaded(world,chunk,true));
+        ServerChunkEvents.CHUNK_UNLOAD.register((world,chunk)->ChunkMetrics.loaded(world,chunk,false));
+        PlayerBlockBreakEvents.AFTER.register((world,player,pos,state,be)->{if(world instanceof ServerWorld server && active!=null && active.owner.equals(player.getUuid()))ChunkMetrics.count(server,"playerBlocksBroken",1);});
+        ServerTickEvents.END_SERVER_TICK.register(server->{drain();if(completed!=null && System.nanoTime()-completedAt>120_000_000_000L)completed=null;if(active!=null)try{active.tick();}catch(Exception e){SmoothFix.LOGGER.error("Advanced benchmark failed",e);Run failed=active;if(failed!=null){failed.report.put("controllerFailure",Map.of("type",e.getClass().getName(),"message",String.valueOf(e.getMessage()),"phase",failed.phase,"stage",failed.stage.name,"stack",Arrays.stream(e.getStackTrace()).limit(48).map(StackTraceElement::toString).toList()));failed.finish("failed: "+e);}}});
+        ServerPlayNetworking.registerGlobalReceiver(BenchmarkProtocol.ADVANCED_RESPONSE,(server,player,handler,buf,sender)->{
+            UUID id=buf.readUuid();int phase=buf.readInt(),action=buf.readUnsignedByte();String json=buf.readString(24000);
+            server.execute(()->response(player,id,phase,action,json));
         });
     }
-
-    public static boolean isRunning() { return active != null; }
-
-    public static String status() {
-        return active == null ? "No advanced benchmark running." : active.status();
+    private static void response(ServerPlayerEntity player,UUID id,int phase,int action,String json) {
+        Run r=active!=null && active.id.equals(id)?active:completed;
+        if(r==null || !r.id.equals(id) || !r.owner.equals(player.getUuid()))return;
+        if(action==4 && r==active){r.finish("client_stopped: "+json);return;}
+        if(action==0 && r==active && phase==r.phase){r.finish("client_interrupted: "+json);return;}
+        if(action==5 && r==active && phase==r.phase){r.result().put("clientSkipReason",json);r.skip("skipped_client_adapter");return;}
+        if(r==active && phase==r.phase){if(action==1 && r.readyAt==0 && r.structureSearch==null)r.readyAt=System.nanoTime();if(action==1 || action==3)r.heartbeat=System.nanoTime();}
+        if(action==2 && phase>=0 && phase<r.results.size())try{
+            JsonObject summary=JsonParser.parseString(json).getAsJsonObject();r.results.get(phase).put("client",summary);
+            boolean passed=summary.has("workloadValidated") && summary.get("workloadValidated").getAsBoolean();
+            r.results.get(phase).put("clientActionValidation",passed?"observed_success":"not_exercised_or_failed");r.classify(r.results.get(phase));r.refreshOutcome();r.checkpoint();if(r==completed)BenchmarkFinalization.update(player,r.id,r.report);
+        }catch(Exception e){SmoothFix.LOGGER.warn("Invalid advanced client summary",e);}
     }
-
-    public static int start(ServerCommandSource source) {
-        if (active != null) { source.sendError(Text.literal("An advanced benchmark is already running.")); return 0; }
-        if (ServerBenchmark.isRunning() || ServerDiagnostics.isProfiling()) { source.sendError(Text.literal("Stop the legacy benchmark/profile first.")); return 0; }
-        ServerPlayerEntity player;
-        try { player = source.getPlayerOrThrow(); }
-        catch (Exception e) { source.sendError(Text.literal("Run the advanced benchmark as a player.")); return 0; }
-
+    private static int start(ServerPlayerEntity player) {
+        MinecraftServer server=player.getServer();
+        if(active!=null || ServerBenchmark.isRunning() || ServerDiagnostics.isProfiling()){player.sendMessage(Text.literal("Stop the current profile/benchmark first."),false);return 0;}
+        if(server.getPlayerManager().getPlayerList().size()!=1){player.sendMessage(Text.literal("Advanced benchmark requires one player on this disposable server/world copy."),false);return 0;}
+        if(!ServerPlayNetworking.canSend(player,BenchmarkProtocol.ADVANCED_CONTROL)){player.sendMessage(Text.literal("Both sides need the same advanced Smooth Fix build."),false);return 0;}
         try {
-            if (!ServerPlayNetworking.canSend(player, BenchmarkProtocol.ADV_CONTROL)) { source.sendError(Text.literal("Install this Smooth Fix advanced build with diagnostics enabled on the client too.")); return 0; }
-            if (!BenchmarkRecovery.restore(player)) {
-                source.sendError(Text.literal("An older benchmark recovery journal could not be restored. Check latest.log."));
-                return 0;
-            }
-            PlayerSnapshot original = PlayerSnapshot.capture(player);
-            BenchmarkRecovery.save(player);
-            Run run = new Run(player.getServer(), player, original);
-            active = run;
-            BenchmarkPlayerAbilities.grantTemporary(player, true);
-            run.checkpoint();
-            run.next();
-            source.sendFeedback(() -> Text.literal("Smooth Fix advanced real-world stress test started. Do not manually move items or change dimensions. /smoothfix stress stop restores your full player state."), false);
-            return 1;
-        } catch (Throwable t) {
-            SmoothFix.LOGGER.error("Could not start advanced benchmark", t);
-            if (active != null) active.finish("start_failed");
-            else BenchmarkRecovery.restore(player);
-            source.sendError(Text.literal("Advanced benchmark could not start; check latest.log."));
-            return 0;
-        }
+            AdvancedPlan plan=AdvancedPlan.load();
+            if(!BenchmarkRecovery.restore(player) || !AdvancedWorldRecovery.restore(server))throw new IllegalStateException("Unresolved recovery journal");
+            BenchmarkRecovery.saveFull(player);AdvancedWorldRecovery.save(server.getOverworld());
+            active=new Run(player,plan);active.checkpoint();active.next();
+            player.sendMessage(Text.literal("Advanced stress started IN THE REAL WORLD COPY. Keep focused. Original inventory/location restored; terrain/loot/advancements are not rolled back. Stop: /smoothfix stress stop."),false);return 1;
+        }catch(Exception e){SmoothFix.LOGGER.error("Cannot start advanced benchmark",e);if(active!=null)active.finish("start_failed");else {BenchmarkRecovery.restore(player);AdvancedWorldRecovery.restore(server);}player.sendMessage(Text.literal("Advanced benchmark failed to start: "+e),false);return 0;}
     }
-
-    public static boolean stop(String reason) {
-        Run run = active;
-        if (run == null) return false;
-        run.finish(reason);
-        return true;
-    }
-
-    /** Called only after LivingEntity.damage returned true. */
-    public static void onAcceptedDamage(net.minecraft.entity.LivingEntity victim, net.minecraft.entity.damage.DamageSource source, float amount) {
-        Run run = active;
-        if (run == null || run.ending || run.stage == null || !"combat".equals(run.stage.mode())) return;
-        Entity attacker = source.getAttacker();
-        if (!(attacker instanceof ServerPlayerEntity player) || !player.getUuid().equals(run.owner)) return;
-        if (!victim.getCommandTags().contains(run.actorTag())) return;
-        run.acceptedPlayerHits++;
-        run.acceptedPlayerDamage += Math.max(0, amount);
-    }
-
-    private static void accept(ServerPlayerEntity player, UUID id, int phase, int action, String data) {
-        Run run = active;
-        if (run == null || !run.id.equals(id) || !run.owner.equals(player.getUuid()) || phase != run.phase) return;
-        long now = System.nanoTime();
-        run.lastHeartbeat = now;
-        if (action == 4) { run.finish("stopped_from_client: " + data); return; }
-        if (action == 3) return;
-        if (action == 0) {
-            run.clientFailure = data;
-            run.requestStageEnd("client_failed");
-            return;
-        }
-        if (action == 1 && run.readyAt == 0) {
-            run.readyAt = now;
-            run.stageResult().put("status", "measuring");
-            run.stageResult().put("readyLatencyMs", (now - run.stageStarted) / 1_000_000.0);
-            if (ServerDiagnostics.startRecording()) run.serverProfiler = true;
-            run.checkpoint();
-            return;
-        }
-        if (action == 5) {
-            run.clientVerified = true;
-            run.stageResult().put("clientVerification", parseJsonOrText(data));
-            return;
-        }
-        if (action == 2 && run.awaitingClientReport) {
-            run.stageResult().put("client", parseJsonOrText(data));
-            run.completeStage(run.pendingStatus == null ? "complete" : run.pendingStatus);
-            run.next();
-        }
-    }
-
-    private static Object parseJsonOrText(String data) {
-        if (data == null || data.isBlank()) return Map.of();
-        try { return JsonParser.parseString(data); }
-        catch (Throwable ignored) { return data; }
+    private static void drain(){for(Entity e:new ArrayList<>(stale))if(!e.isRemoved())e.discard();stale.clear();}
+    /** Spawned projectiles inherit their test owner's token; natural entities remain untouched. */
+    public static void observeSpawn(Entity entity){if(entity instanceof ProjectileEntity p && p.getOwner()!=null)copyOwnership(p.getOwner(),entity);}
+    public static void copyOwnership(Entity source,Entity target){for(String tag:source.getCommandTags())if(tag.startsWith(TAG))target.addCommandTag(tag);}
+    public static boolean ownsActor(Entity entity){Run r=active;return r!=null && entity!=null && entity.getCommandTags().contains(r.tag());}
+    public static void observeDamage(net.minecraft.entity.LivingEntity target,net.minecraft.entity.damage.DamageSource source) {
+        Run r=active;if(r!=null && source.getAttacker() instanceof ServerPlayerEntity p && r.owner.equals(p.getUuid()) && target.getCommandTags().contains(r.tag()))ChunkMetrics.count(r.world,"playerHitsAccepted",1);
     }
 
     private static final class Run {
-        final UUID id = UUID.randomUUID();
-        final UUID owner;
+        final UUID id=UUID.randomUUID(),owner;
         final MinecraftServer server;
-        final PlayerSnapshot original;
-        final Path checkpoint;
-        final Map<String,Object> report = new LinkedHashMap<>();
-        final List<Map<String,Object>> results = new ArrayList<>();
-        final long started = System.nanoTime();
-        int phase = -1;
-        AdvancedStagePlan.Stage stage;
-        long stageStarted, readyAt, lastHeartbeat, endRequestedAt;
-        boolean ending, awaitingClientReport, clientVerified, serverProfiler;
-        String pendingStatus, clientFailure;
-        BlockPos target;
-        String preparedInventorySignature;
-        int preparedSelectedSlot;
-        int acceptedPlayerHits;
-        double acceptedPlayerDamage;
-        final Set<String> structures = new TreeSet<>();
-        final List<BlockPos> temporaryBlocks = new ArrayList<>();
-        final List<Entity> temporaryEntities = new ArrayList<>();
-
-        Run(MinecraftServer server, ServerPlayerEntity player, PlayerSnapshot original) {
-            this.server = server;
-            this.owner = player.getUuid();
-            this.original = original;
-            this.checkpoint = server.getSavePath(WorldSavePath.ROOT).resolve("smooth_fix/benchmarks/advanced_" + id + ".json");
-            report.put("runId", id.toString());
-            report.put("suite", "advanced_real_world_v1");
-            report.put("build", SmoothFix.BUILD_ID);
-            report.put("status", "running");
-            report.put("memoryAtStart", MemoryReport.snapshot("server"));
-            report.put("stages", results);
-            report.put("safety", Map.of(
-                    "recovery", "Full inventory, selected hotbar slot, dimension/position/rotation, gamemode and vanilla ability flags/speeds are journaled before mutation.",
-                    "world", "Temporary vanilla chest and TNT test blocks are placed only into air and removed after their stage. Natural Lootr containers are never modified by server code beyond the normal player interaction.",
-                    "coldChunk", "Chunk is synchronously loaded before terrain height is queried, preventing the old below-terrain placement bug."
-            ));
-        }
-
-        ServerPlayerEntity player() { return server.getPlayerManager().getPlayer(owner); }
-        ServerWorld world() {
-            ServerPlayerEntity p = player();
-            return p == null ? null : (ServerWorld) p.getWorld();
-        }
-        String actorTag() { return "smoothfix_adv:" + id + ":" + phase; }
-        Map<String,Object> stageResult() { return results.get(phase); }
-        String status() { return "Advanced run " + id + ", " + (phase + 1) + "/" + AdvancedStagePlan.stages().size() + " " + (stage == null ? "idle" : stage.name()) + ", " + (awaitingClientReport ? "collecting client report" : readyAt == 0 ? "waiting for client" : "running"); }
-
-        void next() {
-            if (ending) return;
-            cleanupStage();
-            int next = AdvancedStagePlan.next(phase);
-            if (phase == -1) next = 0;
-            if (next < 0) { finish("completed"); return; }
-            phase = next;
-            stage = AdvancedStagePlan.stages().get(phase);
-            stageStarted = System.nanoTime(); readyAt = 0; lastHeartbeat = stageStarted; endRequestedAt = 0;
-            awaitingClientReport = false; clientVerified = false; serverProfiler = false; pendingStatus = null; clientFailure = null;
-            target = null; preparedInventorySignature = null; acceptedPlayerHits = 0; acceptedPlayerDamage = 0; structures.clear();
-            Map<String,Object> result = new LinkedHashMap<>();
-            result.put("phase", phase); result.put("name", stage.name()); result.put("mode", stage.mode());
-            result.put("status", "preparing"); result.put("requiresVerification", stage.requiresVerification());
-            results.add(result);
-            try {
-                if (!prepareStage()) return;
-                result.put("status", "waiting_client_ready");
-                checkpoint();
-                send(1);
-            } catch (Throwable t) {
-                result.put("error", t.toString());
-                SmoothFix.LOGGER.error("Could not prepare advanced benchmark stage {}", stage.name(), t);
-                completeWithoutClient("failed_prepare");
-                next();
+        final AdvancedPlan plan;
+        final List<AdvancedPlan.Stage> stages;
+        final Set<AdvancedPlan.Stage> optionalStructures=Collections.newSetFromMap(new IdentityHashMap<>());
+        final List<Map<String,Object>> results=new ArrayList<>();
+        final Map<String,Object> report=new LinkedHashMap<>();
+        final Path file;
+        final List<Entity> actors=new ArrayList<>();
+        final List<BlockPos> tntSites=new ArrayList<>();
+        final long started=System.nanoTime();
+        final double originX,originZ;
+        ServerWorld world;
+        AdvancedPlan.Stage stage;
+        ChunkMetrics.Recording chunks;
+        int phase=-1,ticks,lastContainerId=-1,lastInventoryItems;
+        String terminationReason;
+        ItemStack lastHotbar;
+        long phaseAt,readyAt,heartbeat,pressureAt,preparationAt,searchProgressAt,preparedAt;
+        IncrementalStructureSearch structureSearch;
+        boolean ending,profiling;
+        double x,y,z,coldX,coldZ;
+        BlockPos container,fixture;
+        BlockState fixtureOriginal;
+        BlockPos lastStructure;
+        Run(ServerPlayerEntity player,AdvancedPlan plan) {
+            this.owner=player.getUuid();this.server=player.getServer();this.plan=plan;this.stages=new ArrayList<>(plan.stages);
+            originX=player.getWorld()==server.getOverworld()?player.getX():server.getOverworld().getSpawnPos().getX();originZ=player.getWorld()==server.getOverworld()?player.getZ():server.getOverworld().getSpawnPos().getZ();
+            var registry=server.getRegistryManager().get(RegistryKeys.STRUCTURE);int added=0,index=!stages.isEmpty() && stages.get(stages.size()-1).mode.equals("save")?stages.size()-1:stages.size();
+            for(Identifier key:registry.getIds().stream().sorted(Comparator.comparing(Identifier::toString)).toList())if(!key.getNamespace().equals("minecraft") && added<plan.automaticallySelectedModStructures) {
+                var entry=registry.entryOf(RegistryKey.of(RegistryKeys.STRUCTURE,key));
+                if(!server.getOverworld().getChunkManager().getStructurePlacementCalculator().getPlacements(entry).isEmpty()){var optional=new AdvancedPlan.Stage("mod_structure_"+key,"structure",key.toString(),0);optionalStructures.add(optional);stages.add(index++,optional);added++;}
             }
+            file=server.getSavePath(WorldSavePath.ROOT).resolve("smooth_fix/advanced_benchmarks/"+id+".json");
+            report.put("runId",id.toString());report.put("build",SmoothFix.BUILD_ID);report.put("suite","actual_world_advanced_v2");report.put("status","running");report.put("stages",results);
+            report.put("installedMods",net.fabricmc.loader.api.FabricLoader.getInstance().getAllMods().stream().map(m->Map.of("id",m.getMetadata().getId(),"version",m.getMetadata().getVersion().getFriendlyString())).toList());
+            report.put("worldSeed",server.getOverworld().getSeed());report.put("worldCopyAcknowledged",true);
+            report.put("limitations",List.of("Terrain destruction, generated chunks, loot state, advancements and mod-global effects are permanent in the test copy.","Scripted camera/flight/native attacks and UI actions; no claim of every mod-specific ability being forced.","Client/server clocks are not synchronized. Stage recording includes preparation/loading; first-render latency excludes GPU completion.","Structure search expands in block-radius bands until found or the world border is exhausted. Disabled, unregistered or unsupported placements are explicitly skipped. Native structure-start generation can add work while searching.","Routes become warm on repeated runs. A cold route is validated only by observed generation hooks.","Hook timings/sampling add overhead; no GPU hardware counters or index rebake is forced."));
         }
-
-        boolean prepareStage() {
-            ServerPlayerEntity p = requirePlayer();
-            ServerWorld world = (ServerWorld) p.getWorld();
-            BenchmarkPlayerAbilities.grantTemporary(p, true);
-            switch (stage.mode()) {
-                case "route" -> {
-                    target = p.getBlockPos();
-                    stageResult().put("loadedChunksAtPrepare", world.getChunkManager().getLoadedChunkCount());
-                }
-                case "cold_route" -> prepareColdChunk(p, world);
-                case "structure" -> { target = p.getBlockPos(); scanStructures(world, p.getBlockPos(), 4); }
-                case "container" -> prepareVanillaChest(p, world);
-                case "lootr" -> {
-                    if (!FabricLoader.getInstance().isModLoaded("lootr")) {
-                        stageResult().put("status", "skipped_mod_unavailable"); checkpoint(); next(); return false;
-                    }
-                    BlockPos found = findLootr(world, p.getBlockPos(), 5);
-                    if (found == null) {
-                        stageResult().put("status", "skipped_no_loaded_lootr_container");
-                        stageResult().put("note", "Run the suite from/near a generated Lootr structure for a real Lootr interaction sample.");
-                        checkpoint(); next(); return false;
-                    }
-                    BlockPos safe = findSafeStand(world, found, 4);
-                    if (safe == null) {
-                        stageResult().put("status", "skipped_lootr_container_inaccessible"); checkpoint(); next(); return false;
-                    }
-                    p.teleport(world, safe.getX() + .5, safe.getY(), safe.getZ() + .5, p.getYaw(), p.getPitch());
-                    target = found;
-                    preparedInventorySignature = inventorySignature(p);
-                    stageResult().put("lootrBlockEntity", world.getBlockEntity(found).getType().toString());
-                    stageResult().put("target", posMap(found));
-                }
-                case "inventory" -> prepareInventory(p);
-                case "emi" -> { target = p.getBlockPos(); }
-                case "combat" -> prepareCombat(p, world);
-                case "tnt" -> prepareTnt(p, world);
-                default -> throw new IllegalStateException("Unknown advanced stage mode " + stage.mode());
+        String tag(){return TAG+id+":"+phase;}
+        ServerPlayerEntity player(){return server.getPlayerManager().getPlayer(owner);}
+        Map<String,Object> result(){return results.get(phase);}
+        void send(int action) {
+            ServerPlayerEntity p=player();if(p==null)return;
+            var data=new LinkedHashMap<String,Object>();data.put("action",action);data.put("run",id.toString());data.put("phase",phase);data.put("stage",stage==null?"finished":stage.name);data.put("mode",stage==null?"stop":stage.mode);
+            data.put("totalStages",stages.size());data.put("nextStage",phase+1<stages.size()?stages.get(phase+1).name:"Selesai dan recovery");data.put("optionalSearchSeconds",stage!=null && optionalStructures.contains(stage)?plan.optionalModStructureSearchSeconds:0);
+            data.put("prepared",action==3);data.put("seconds",stage==null?0:stage.seconds);data.put("dimension",world==null?"minecraft:overworld":world.getRegistryKey().getValue().toString());data.put("x",x);data.put("y",y);data.put("z",z);data.put("queries",plan.emiQueries);data.put("entities",actors.stream().filter(e->e instanceof MobEntity && e.getType()!=EntityType.IRON_GOLEM).map(Entity::getId).toList());
+            data.put("searchingStructure",structureSearch!=null);
+            if(structureSearch!=null)data.put("structureSearch",structureSearch.progress());
+            if(container!=null)data.put("container",Map.of("x",container.getX(),"y",container.getY(),"z",container.getZ()));
+            var buf=PacketByteBufs.create();buf.writeString(GSON.toJson(data),24000);ServerPlayNetworking.send(p,BenchmarkProtocol.ADVANCED_CONTROL,buf);
+        }
+        void next() throws Exception {
+            cleanup();if(++phase>=stages.size()){finish("completed");return;}
+            stage=stages.get(phase);ticks=0;readyAt=0;heartbeat=phaseAt=System.nanoTime();container=null;lastContainerId=-1;
+            world=server.getWorld(stage.mode.equals("nether")?World.NETHER:stage.mode.equals("end")?World.END:World.OVERWORLD);
+            Map<String,Object> data=new LinkedHashMap<>();data.put("phase",phase);data.put("name",stage.name);data.put("mode",stage.mode);data.put("target",stage.target);data.put("requestedEntities",stage.count);data.put("status","preparing");data.put("clientActionValidation","awaiting_client");results.add(data);
+            player().sendMessage(Text.literal("[Smooth Fix Advanced "+(phase+1)+"/"+stages.size()+"] "+stage.name+" — "+AdvancedStageInfo.task(stage.mode)+". Durasi aksi "+stage.seconds+" dtk."),false);
+            if(world==null){data.put("status","skipped_dimension_missing");checkpoint();next();return;}
+            x=originX;z=originZ;
+            if(stage.mode.equals("structure") && player().getServerWorld()==world){x=player().getX();z=player().getZ();}
+            if(stage.mode.equals("cold_route")){coldX=originX+8192+((owner.getLeastSignificantBits()&31)*1024);coldZ=originZ+8192;x=coldX;z=coldZ;}
+            if(stage.target.equals("previous_cold")){x=coldX;z=coldZ;}
+            if(stage.mode.equals("nether")){x=originX/8;z=originZ/8;}
+            if(stage.mode.equals("end")){x=0;z=0;}
+            if((stage.mode.equals("chest") || stage.mode.equals("lootr")) && lastStructure!=null){x=lastStructure.getX();z=lastStructure.getZ();}
+            y=world==server.getWorld(World.NETHER)?100:140;
+            // Start both recorders BEFORE native teleport/chunk generation and synchronous setup work.
+            send(1);chunks=ChunkMetrics.start(world);if(!ServerDiagnostics.startRecording())throw new IllegalStateException("Profiler conflict");profiling=true;
+            data.put("worldBeforePreparation",snapshot());ServerPlayerEntity p=player();p.closeHandledScreen();p.changeGameMode(GameMode.SURVIVAL);BenchmarkAbilities.grant(p);p.teleport(world,x,y,z,0,20);
+            preparationAt=System.nanoTime();
+            if(stage.mode.equals("structure")) {
+                var registry=server.getRegistryManager().get(RegistryKeys.STRUCTURE);RegistryEntryList<Structure> entries;
+                if(stage.target.equals("#minecraft:village"))entries=VillageStructureTargets.resolve(world);
+                else if(stage.target.startsWith("#"))entries=registry.getEntryList(TagKey.of(RegistryKeys.STRUCTURE,new Identifier(stage.target.substring(1)))).orElse(null);
+                else {var key=RegistryKey.of(RegistryKeys.STRUCTURE,new Identifier(stage.target));entries=registry.getEntry(key).map(RegistryEntryList::of).orElse(null);}
+                if(entries==null || entries.size()==0){skip("skipped_structure_unregistered");return;}
+                List<String> targetIds=new ArrayList<>();for(var entry:entries)entry.getKey().ifPresent(key->targetIds.add(key.getValue().toString()));data.put("resolvedStructureTargets",targetIds);
+                structureSearch=new IncrementalStructureSearch(world,entries,new BlockPos(MathHelper.floor(x),80,MathHelper.floor(z)),plan.structureSearchRadiusStepBlocks);
+                data.put("structureSearchOrigin",Map.of("x",x,"z",z));data.put("status","searching_structure");data.put("structureSearch",structureSearch.progress());
+                if(structureSearch.unavailable()!=null){skip(structureSearch.unavailable());return;}
+                send(6);searchProgressAt=System.nanoTime();checkpoint();return;
             }
-            return true;
+            prepareStage(p);
         }
-
-        void prepareColdChunk(ServerPlayerEntity p, ServerWorld world) {
-            int x = p.getBlockX() + 4096 + Math.floorMod(owner.hashCode(), 256);
-            int z = p.getBlockZ() + 4096 + Math.floorMod(Long.hashCode(id.getMostSignificantBits()), 256);
-            int cx = x >> 4, cz = z >> 4;
-            long before = System.nanoTime();
-            WorldChunk chunk = world.getChunk(cx, cz); // force readiness BEFORE querying height
-            long after = System.nanoTime();
-            int y = world.getTopY(Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, x, z);
-            p.teleport(world, x + .5, y + 2, z + .5, p.getYaw(), p.getPitch());
-            target = new BlockPos(x, y + 2, z);
-            stageResult().put("chunk", Map.of("x", cx, "z", cz));
-            stageResult().put("chunkPrepareMs", (after - before) / 1_000_000.0);
-            stageResult().put("chunkStatus", chunk.getStatus().toString());
-            stageResult().put("terrainTopY", y);
-        }
-
-        void prepareVanillaChest(ServerPlayerEntity p, ServerWorld world) {
-            BlockPos pos = airAboveTerrain(world, p.getBlockX() + 2, p.getBlockZ() + 2, 1);
-            world.setBlockState(pos, Blocks.CHEST.getDefaultState());
-            temporaryBlocks.add(pos);
-            BlockEntity be = world.getBlockEntity(pos);
-            if (!(be instanceof Inventory inventory)) throw new IllegalStateException("Temporary chest did not expose an inventory");
-            inventory.setStack(0, new ItemStack(Items.DIAMOND, 1));
-            be.markDirty();
-            target = pos;
-            preparedInventorySignature = inventorySignature(p);
-            stageResult().put("target", posMap(pos));
-            stageResult().put("verification", "server observes actual player inventory NBT changing after QUICK_MOVE");
-        }
-
-        void prepareInventory(ServerPlayerEntity p) {
-            preparedSelectedSlot = p.getInventory().selectedSlot;
-            int inventoryIndex = 9;
-            ItemStack existing = p.getInventory().getStack(inventoryIndex);
-            if (existing.isEmpty()) p.getInventory().setStack(inventoryIndex, new ItemStack(Items.COBBLESTONE, 7));
-            else p.getInventory().setStack(inventoryIndex, new ItemStack(Items.GOLD_INGOT, 3));
-            p.currentScreenHandler.sendContentUpdates();
-            p.playerScreenHandler.sendContentUpdates();
-            preparedInventorySignature = inventorySignature(p);
-            target = p.getBlockPos();
-            stageResult().put("selectedSlotBeforeUi", preparedSelectedSlot);
-            stageResult().put("temporaryInventoryIndex", inventoryIndex);
-        }
-
-        void prepareCombat(ServerPlayerEntity p, ServerWorld world) {
-            MobEntity mob = (MobEntity) EntityType.ZOMBIE.create(world);
-            if (mob == null) throw new IllegalStateException("Could not create combat target");
-            mob.refreshPositionAndAngles(p.getX() + 3.0, p.getY(), p.getZ(), 0, 0);
-            mob.initialize(world, world.getLocalDifficulty(mob.getBlockPos()), SpawnReason.COMMAND, null, null);
-            mob.setPersistent(); mob.addCommandTag(actorTag());
-            if (!world.spawnEntity(mob)) throw new IllegalStateException("Combat target spawn refused");
-            temporaryEntities.add(mob); target = mob.getBlockPos();
-            stageResult().put("targetEntity", Registries.ENTITY_TYPE.getId(mob.getType()).toString());
-            stageResult().put("verification", "LivingEntity.damage returned true for damage whose attacker is the benchmark owner");
-        }
-
-        void prepareTnt(ServerPlayerEntity p, ServerWorld world) {
-            BlockPos center = airAboveTerrain(world, p.getBlockX() + 5, p.getBlockZ(), 3);
-            for (int dx = -2; dx <= 2; dx++) for (int dz = -2; dz <= 2; dz++) {
-                BlockPos pos = center.add(dx, 0, dz);
-                if (world.getBlockState(pos).isAir()) { world.setBlockState(pos, Blocks.GLASS.getDefaultState()); temporaryBlocks.add(pos); }
-            }
-            TntEntity tnt = new TntEntity(world, center.getX() + .5, center.getY() + 1.0, center.getZ() + .5, p);
-            tnt.setFuse(40); tnt.addCommandTag(actorTag());
-            world.spawnEntity(tnt); temporaryEntities.add(tnt); target = center;
-            stageResult().put("target", posMap(center));
-            stageResult().put("testGlassBlocks", temporaryBlocks.size());
-            stageResult().put("verification", "at least one benchmark glass block is actually destroyed after primed TNT detonates");
-        }
-
-        void tick() {
-            if (ending) return;
-            ServerPlayerEntity p = player();
-            if (p == null) { finish("owner_missing"); return; }
-            long now = System.nanoTime();
-            if (readyAt == 0) {
-                if (now - stageStarted > stage.timeoutSeconds() * 1_000_000_000L) requestStageEnd("client_ready_timeout");
-                return;
-            }
-            if (now - lastHeartbeat > 20_000_000_000L) { finish("client_heartbeat_timeout"); return; }
-            if (awaitingClientReport) {
-                if (now - endRequestedAt > 15_000_000_000L) { completeStage((pendingStatus == null ? "complete" : pendingStatus) + "_client_report_timeout"); next(); }
-                return;
-            }
-
-            ServerWorld world = (ServerWorld) p.getWorld();
-            if ("structure".equals(stage.mode()) || "route".equals(stage.mode()) || "cold_route".equals(stage.mode())) scanStructures(world, p.getBlockPos(), 2);
-
-            boolean verified = switch (stage.mode()) {
-                case "container", "lootr" -> preparedInventorySignature != null && !preparedInventorySignature.equals(inventorySignature(p));
-                case "inventory" -> preparedSelectedSlot != p.getInventory().selectedSlot && preparedInventorySignature != null && !preparedInventorySignature.equals(inventorySignature(p));
-                case "emi" -> clientVerified;
-                case "combat" -> acceptedPlayerHits > 0;
-                case "tnt" -> temporaryBlocks.stream().anyMatch(pos -> !world.getBlockState(pos).isOf(Blocks.GLASS));
-                default -> false;
-            };
-            if (verified) {
-                stageResult().put("actionVerified", true);
-                if ("combat".equals(stage.mode())) { stageResult().put("acceptedPlayerHits", acceptedPlayerHits); stageResult().put("acceptedPlayerDamage", acceptedPlayerDamage); }
-                requestStageEnd("complete");
-                return;
-            }
-
-            long elapsed = now - readyAt;
-            if (!stage.requiresVerification() && elapsed >= stage.measurementSeconds() * 1_000_000_000L) {
-                stageResult().put("actionVerified", "structure".equals(stage.mode()) ? !structures.isEmpty() : true);
-                if (!structures.isEmpty()) stageResult().put("structuresObserved", new ArrayList<>(structures));
-                requestStageEnd("structure".equals(stage.mode()) && structures.isEmpty() ? "complete_no_structure_observed" : "complete");
-            } else if (elapsed >= stage.timeoutSeconds() * 1_000_000_000L) {
-                stageResult().put("actionVerified", false);
-                if ("combat".equals(stage.mode())) stageResult().put("acceptedPlayerHits", acceptedPlayerHits);
-                requestStageEnd(clientFailure == null ? "failed_action_not_verified" : "client_failed: " + clientFailure);
-            }
-        }
-
-        void requestStageEnd(String status) {
-            if (awaitingClientReport || ending) return;
-            pendingStatus = status;
-            awaitingClientReport = true;
-            endRequestedAt = System.nanoTime();
-            send(2);
-        }
-
-        void completeWithoutClient(String status) {
-            pendingStatus = status;
-            completeStage(status);
-        }
-
-        void completeStage(String status) {
-            if (phase < 0 || phase >= results.size()) return;
-            Map<String,Object> result = stageResult();
-            result.put("status", status);
-            result.put("elapsedSeconds", (System.nanoTime() - stageStarted) / 1_000_000_000.0);
-            if (!structures.isEmpty()) result.put("structuresObserved", new ArrayList<>(structures));
-            if (serverProfiler) { result.put("server", ServerDiagnostics.finishRecording()); serverProfiler = false; }
-            result.put("worldAtEnd", worldSnapshot());
-            checkpoint();
-        }
-
-        void scanStructures(ServerWorld world, BlockPos center, int radiusChunks) {
-            int cx = center.getX() >> 4, cz = center.getZ() >> 4;
-            for (int x = cx - radiusChunks; x <= cx + radiusChunks; x++) for (int z = cz - radiusChunks; z <= cz + radiusChunks; z++) {
-                WorldChunk chunk;
-                try { chunk = world.getChunk(x, z); } catch (Throwable ignored) { continue; }
-                for (Map.Entry<Structure, StructureStart> entry : chunk.getStructureStarts().entrySet()) {
-                    StructureStart start = entry.getValue();
-                    if (start == null || !start.hasChildren()) continue;
-                    var id = world.getRegistryManager().get(net.minecraft.registry.RegistryKeys.STRUCTURE).getId(entry.getKey());
-                    structures.add(id == null ? entry.getKey().getClass().getName() : id.toString());
-                }
-            }
-        }
-
-        BlockPos findLootr(ServerWorld world, BlockPos center, int radiusChunks) {
-            BlockPos nearest = null; double nearestSq = Double.MAX_VALUE;
-            int cx = center.getX() >> 4, cz = center.getZ() >> 4;
-            for (int x = cx - radiusChunks; x <= cx + radiusChunks; x++) for (int z = cz - radiusChunks; z <= cz + radiusChunks; z++) {
-                WorldChunk chunk;
-                try { chunk = world.getChunk(x, z); } catch (Throwable ignored) { continue; }
-                for (Map.Entry<BlockPos, BlockEntity> e : chunk.getBlockEntities().entrySet()) {
-                    var typeId = Registries.BLOCK_ENTITY_TYPE.getId(e.getValue().getType());
-                    if (!"lootr".equals(typeId.getNamespace())) continue;
-                    double dx=e.getKey().getX()-center.getX(), dy=e.getKey().getY()-center.getY(), dz=e.getKey().getZ()-center.getZ();
-                    double d = dx*dx + dy*dy + dz*dz;
-                    if (d < nearestSq) { nearestSq = d; nearest = e.getKey().toImmutable(); }
-                }
-            }
-            return nearest;
-        }
-
-        BlockPos findSafeStand(ServerWorld world, BlockPos around, int radius) {
-            for (int r = 1; r <= radius; r++) for (int dx = -r; dx <= r; dx++) for (int dz = -r; dz <= r; dz++) {
-                BlockPos pos = around.add(dx, 0, dz);
-                for (int dy = 3; dy >= -3; dy--) {
-                    BlockPos feet = pos.add(0, dy, 0);
-                    if (world.getBlockState(feet).isAir() && world.getBlockState(feet.up()).isAir() && !world.getBlockState(feet.down()).isAir()) return feet;
-                }
+        GroundRoutePlanner.Point findStanding(ServerPlayerEntity p) {
+            var terrain=new GroundCollisionTerrain(world,p);
+            int cx=MathHelper.floor(x),cz=MathHelper.floor(z);
+            for(int radius=0;radius<=8;radius+=2)for(int dx=-radius;dx<=radius;dx+=2)for(int dz=-radius;dz<=radius;dz+=2){
+                if(Math.max(Math.abs(dx),Math.abs(dz))!=radius || world.getChunkManager().getWorldChunk((cx+dx)>>4,(cz+dz)>>4)==null)continue;
+                int height=world==server.getWorld(World.NETHER)?MathHelper.floor(y):world.getTopY(Heightmap.Type.MOTION_BLOCKING_NO_LEAVES,cx+dx,cz+dz);
+                var point=terrain.step(new GroundRoutePlanner.Point(cx+dx,height,cz+dz),0,0);if(point==null)continue;
+                int exits=0;for(var direction:new int[][]{{1,0},{-1,0},{0,1},{0,-1}})if(terrain.step(point,direction[0],direction[1])!=null)exits++;
+                if(exits>=2)return point;
             }
             return null;
         }
-
-        BlockPos airAboveTerrain(ServerWorld world, int x, int z, int extra) {
-            world.getChunk(x >> 4, z >> 4); // readiness is mandatory before height query
-            int top = world.getTopY(Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, x, z);
-            BlockPos pos = new BlockPos(x, top + Math.max(1, extra), z);
-            for (int i = 0; i < 12 && !world.getBlockState(pos).isAir(); i++) pos = pos.up();
-            if (!world.getBlockState(pos).isAir()) throw new IllegalStateException("Could not find safe air test position");
-            return pos;
-        }
-
-        void cleanupStage() {
-            if (serverProfiler) { try { ServerDiagnostics.finishRecording(); } catch (Throwable ignored) { } serverProfiler = false; }
-            ServerWorld world = world();
-            for (Entity e : temporaryEntities) if (e != null && !e.isRemoved()) e.discard();
-            temporaryEntities.clear();
-            if (world != null) for (BlockPos pos : temporaryBlocks) {
-                try { world.setBlockState(pos, Blocks.AIR.getDefaultState()); } catch (Throwable ignored) { }
+        void prepareStage(ServerPlayerEntity p) throws Exception {
+            Map<String,Object> data=result();
+            world.getChunk(MathHelper.floor(x)>>4,MathHelper.floor(z)>>4);
+            if(world==server.getWorld(World.NETHER)){BlockPos safe=null;for(int dx=-8;dx<=8 && safe==null;dx+=2)for(int dz=-8;dz<=8 && safe==null;dz+=2)for(int sy=110;sy>=32;sy--){BlockPos feet=new BlockPos(MathHelper.floor(x)+dx,sy,MathHelper.floor(z)+dz);if(world.getBlockState(feet).isAir() && world.getBlockState(feet.up()).isAir() && !world.getBlockState(feet.down()).isAir() && world.getFluidState(feet.down()).isEmpty()){safe=feet;break;}}if(safe==null){skip("skipped_no_accessible_nether_airspace");return;}x=safe.getX()+.5;y=safe.getY()+.1;z=safe.getZ()+.5;}
+            if(world!=server.getWorld(World.NETHER))y=world.getTopY(Heightmap.Type.MOTION_BLOCKING_NO_LEAVES,MathHelper.floor(x),MathHelper.floor(z))+10;
+            if(AdvancedStageInfo.walking(stage.mode)){
+                var standing=findStanding(p);if(standing==null){skip("skipped_no_safe_walkable_start");return;}
+                x=standing.x()+.5;y=standing.y();z=standing.z()+.5;
             }
-            temporaryBlocks.clear();
+            p.teleport(world,x,y,z,0,25);BenchmarkAbilities.grant(p,!AdvancedStageInfo.walking(stage.mode));
+            if(Set.of("combat","effects","bloodmoon","wither").contains(stage.mode)) {
+                if(stage.mode.equals("bloodmoon")) {
+                    if(!BloodMoonAdapter.available() || !AdvancedWorldRecovery.canForceMoon(server)){skip("skipped_blood_moon_adapter_or_backup_unavailable");return;}
+                    // Enhanced Celestials suppresses lunar events while rain strength is visible.
+                    world.setWeather(24000,0,false,false);world.setRainGradient(0);world.setThunderGradient(0);
+                    world.setTimeOfDay((world.getTimeOfDay()/24000)*24000+14000);BloodMoonAdapter.enableInWorld(world);
+                }
+                EntityType<?> type=Registries.ENTITY_TYPE.getOrEmpty(new Identifier(stage.target)).orElse(null);
+                if(type==null){skip("skipped_entity_unregistered");return;}
+                spawn(type,stage.count);if(!stage.mode.equals("combat"))spawn(EntityType.IRON_GOLEM,8);p.getInventory().setStack(8,new ItemStack(Items.DIAMOND_SWORD));p.getInventory().selectedSlot=8;
+            }
+            if(stage.mode.equals("chest") || stage.mode.equals("lootr")){prepareContainer(p);if(container==null){skip("skipped_lootr_block_unavailable");return;}}
+            if(stage.mode.equals("inventory") || stage.mode.startsWith("emi_"))fillInventory(p);
+            if(stage.mode.equals("tnt")){
+                BlockPos dry=findDrySurface(MathHelper.floor(x),MathHelper.floor(z),64);
+                if(dry==null){skip("skipped_no_loaded_dry_terrain_for_tnt");return;}
+                x=dry.getX()+.5;z=dry.getZ()+.5;y=dry.getY()+8;tntSites.clear();
+                for(int i=0;i<stage.count;i++){double angle=(i+1)*2.4;BlockPos site=findDrySurface(MathHelper.floor(x+Math.cos(angle)*10),MathHelper.floor(z+Math.sin(angle)*10),8);tntSites.add(site==null?dry:site);}
+                p.teleport(world,x,y,z,0,35);BenchmarkAbilities.grant(p);data.put("observerHeightAboveTerrain",8);data.put("tntSites",tntSites.stream().map(pos->Map.of("x",pos.getX(),"y",pos.getY(),"z",pos.getZ())).toList());
+            }
+            if(stage.mode.equals("weather"))world.setWeather(0,24000,true,true);
+            p.getInventory().markDirty();p.playerScreenHandler.syncState();
+            p.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.UpdateSelectedSlotS2CPacket(p.getInventory().selectedSlot));lastHotbar=p.getInventory().getStack(0).copy();lastInventoryItems=inventoryItems(p);data.put("preparationMs",(System.nanoTime()-preparationAt)/1e6);data.put("worldAfterPreparation",snapshot());data.put("status","waiting_for_client");preparedAt=System.nanoTime();send(3);checkpoint();
         }
-
-        void send(int action) {
-            ServerPlayerEntity p = player();
-            if (p == null || !ServerPlayNetworking.canSend(p, BenchmarkProtocol.ADV_CONTROL)) return;
-            var buf = PacketByteBufs.create();
-            buf.writeByte(action); buf.writeUuid(id); buf.writeInt(phase);
-            buf.writeString(stage == null ? "" : stage.name());
-            buf.writeString(stage == null ? "" : stage.mode());
-            ServerWorld world = world();
-            buf.writeString(world == null ? "" : world.getRegistryKey().getValue().toString());
-            BlockPos c = target == null ? (p == null ? BlockPos.ORIGIN : p.getBlockPos()) : target;
-            buf.writeDouble(c.getX() + .5); buf.writeDouble(c.getY()); buf.writeDouble(c.getZ() + .5);
-            buf.writeLong(target == null ? Long.MIN_VALUE : target.asLong());
-            buf.writeInt(stage == null ? 0 : stage.measurementSeconds());
-            ServerPlayNetworking.send(p, BenchmarkProtocol.ADV_CONTROL, buf);
+        void prepareContainer(ServerPlayerEntity p) {
+            boolean lootr=stage.mode.equals("lootr");
+            for(int slot=0;slot<36;slot++)p.getInventory().setStack(slot,ItemStack.EMPTY);p.getInventory().markDirty();p.playerScreenHandler.sendContentUpdates();
+            for(int cx=(MathHelper.floor(x)>>4)-4;cx<=(MathHelper.floor(x)>>4)+4 && container==null;cx++)for(int cz=(MathHelper.floor(z)>>4)-4;cz<=(MathHelper.floor(z)>>4)+4 && container==null;cz++) {
+                Chunk chunk=world.getChunkManager().getChunk(cx,cz,ChunkStatus.FULL,false);
+                if(chunk instanceof WorldChunk full)for(var entry:full.getBlockEntities().entrySet()) {
+                    String id=Registries.BLOCK.getId(full.getBlockState(entry.getKey()).getBlock()).toString();
+                    if(entry.getValue() instanceof net.minecraft.screen.NamedScreenHandlerFactory && (lootr?id.startsWith("lootr:"):id.equals("minecraft:chest") || id.equals("minecraft:barrel"))){container=entry.getKey().toImmutable();result().put("containerSource","existing_generated_or_player_placed");break;}
+                }
+            }
+            if(container==null) {
+                Block block=lootr?Registries.BLOCK.getIds().stream().filter(id->id.getNamespace().equals("lootr") && id.getPath().equals("lootr_chest")).findFirst().map(Registries.BLOCK::get).orElse(null):Blocks.CHEST;
+                if(block==null)return;
+                container=new BlockPos(MathHelper.floor(x)+2,world.getTopY(Heightmap.Type.MOTION_BLOCKING_NO_LEAVES,MathHelper.floor(x)+2,MathHelper.floor(z)),MathHelper.floor(z));while(!world.getBlockState(container).isAir() && container.getY()<world.getTopY()-1)container=container.up();if(!world.getBlockState(container).isAir()){container=null;return;}fixture=container;fixtureOriginal=world.getBlockState(container);world.setBlockState(container,block.getDefaultState());
+                BlockEntity be=world.getBlockEntity(container);if(be instanceof LootableContainerBlockEntity loot)loot.setLootTable(new Identifier("minecraft","chests/simple_dungeon"),world.getSeed());
+                result().put("containerSource","explicit_fixture_in_actual_world");
+            }
+            result().put("containerBlock",Registries.BLOCK.getId(world.getBlockState(container).getBlock()).toString());
+            BlockPos stand=null;
+            for(int dy=0;dy<=2 && stand==null;dy++)for(Direction direction:Direction.Type.HORIZONTAL){BlockPos candidate=container.offset(direction,2).up(dy);if(world.getBlockState(candidate).isAir() && world.getBlockState(candidate.up()).isAir()){stand=candidate;break;}}
+            if(stand==null)throw new IllegalStateException("No reachable air stand next to container "+container);
+            x=stand.getX()+.5;z=stand.getZ()+.5;y=stand.getY();p.teleport(world,x,y,z,180,20);result().put("containerStand",Map.of("x",x,"y",y,"z",z));
+            // Lootr's ordinary per-player use path runs in survival; flight/invulnerability are temporary.
+            p.changeGameMode(GameMode.SURVIVAL);BenchmarkAbilities.grant(p);
         }
-
-        void checkpoint() {
-            try { BenchmarkRecovery.atomic(checkpoint, GSON.toJson(report)); }
-            catch (Throwable t) { SmoothFix.LOGGER.error("Could not write advanced benchmark checkpoint", t); }
+        BlockPos findDrySurface(int centerX,int centerZ,int radius){
+            for(int r=0;r<=radius;r+=4)for(int dx=-r;dx<=r;dx+=4)for(int dz=-r;dz<=r;dz+=4){
+                if(r>0 && Math.abs(dx)!=r && Math.abs(dz)!=r)continue;
+                int bx=centerX+dx,bz=centerZ+dz;Chunk chunk=world.getChunkManager().getChunk(bx>>4,bz>>4,ChunkStatus.FULL,false);
+                if(!(chunk instanceof WorldChunk))continue;
+                int by=world.getTopY(Heightmap.Type.MOTION_BLOCKING_NO_LEAVES,bx,bz);BlockPos ground=new BlockPos(bx,by-1,bz);
+                if(world.getFluidState(ground).isEmpty() && !world.getBlockState(ground).isAir() && world.getBlockState(ground.up()).isAir() && world.getBlockState(ground.up(2)).isAir())return ground.up();
+            }
+            return null;
         }
-
-        void finish(String reason) { finishWithPlayer(reason, player()); }
-
-        void finishWithPlayer(String reason, ServerPlayerEntity p) {
-            if (ending) return;
-            ending = true;
-            cleanupStage();
-            try { if (p != null) send(0); } catch (Throwable ignored) { }
-            report.put("status", reason);
-            report.put("elapsedSeconds", (System.nanoTime() - started) / 1_000_000_000.0);
-            report.put("memoryAtEnd", MemoryReport.snapshot("server"));
-            boolean restored = p != null && BenchmarkRecovery.restore(p);
-            report.put("playerRestored", restored);
-            if (p != null && restored) report.put("recoveryVerification", original.compare(p));
-            else report.put("recoveryVerification", Map.of("all", false, "reason", p == null ? "player_missing" : "journal_restore_failed"));
-            checkpoint();
-            if (p != null) p.sendMessage(Text.literal("Smooth Fix advanced benchmark " + reason + ". Report: " + checkpoint.toAbsolutePath()), false);
-            SmoothFix.LOGGER.info("Smooth Fix advanced benchmark {}: {}", reason, checkpoint.toAbsolutePath());
-            active = null;
+        void fillInventory(ServerPlayerEntity p) {
+            p.changeGameMode(GameMode.SURVIVAL);BenchmarkAbilities.grant(p);
+            List<Item> items=new ArrayList<>();Set<String> namespaces=new HashSet<>();
+            for(Identifier id:Registries.ITEM.getIds().stream().sorted(Comparator.comparing(Identifier::toString)).toList())if(!id.getNamespace().equals("minecraft") && namespaces.add(id.getNamespace()))items.add(Registries.ITEM.get(id));
+            for(Item item:List.of(Items.DIAMOND_SWORD,Items.DIAMOND_PICKAXE,Items.IRON_INGOT,Items.OAK_LOG,Items.REDSTONE,Items.BOW,Items.BOOK,Items.GOLD_INGOT))items.add(item);
+            if(items.isEmpty())items.add(Items.STONE);
+            for(int i=0;i<36;i++){ItemStack stack=new ItemStack(items.get(i%items.size()));stack.setCustomName(Text.literal("Smooth Fix benchmark item "+i));p.getInventory().setStack(i,stack);}
+            p.getInventory().markDirty();p.playerScreenHandler.sendContentUpdates();result().put("inventoryFixtureSlots",36);
         }
-
-        ServerPlayerEntity requirePlayer() {
-            ServerPlayerEntity p = player();
-            if (p == null) throw new IllegalStateException("Benchmark owner is not online");
-            return p;
+        void spawn(EntityType<?> type,int count) {
+            for(int i=0;i<count;i++) {
+                Entity entity=type.create(world);if(!(entity instanceof MobEntity mob))throw new IllegalArgumentException("Entity scenario requires a mob: "+type);
+                double angle=i*2.39996323,ex=x+Math.cos(angle)*(8+i%8),ez=z+Math.sin(angle)*(8+i%8);world.getChunk(MathHelper.floor(ex)>>4,MathHelper.floor(ez)>>4);int ey=world.getTopY(Heightmap.Type.MOTION_BLOCKING_NO_LEAVES,MathHelper.floor(ex),MathHelper.floor(ez));
+                mob.refreshPositionAndAngles(ex,ey,ez,0,0);mob.initialize(world,world.getLocalDifficulty(mob.getBlockPos()),SpawnReason.COMMAND,null,null);mob.setPersistent();mob.addCommandTag(tag());
+                if(mob instanceof WitherEntity wither)wither.onSummoned();actors.add(mob);if(!world.spawnEntity(mob))throw new IllegalStateException("Spawn rejected");
+            }
         }
+        void tick() throws Exception {
+            ServerPlayerEntity p=player();long now=System.nanoTime();
+            if(p==null){finish("owner_missing");return;}
+            if(server.getPlayerManager().getPlayerList().size()!=1){finish("another_player_joined");return;}
+            if(p.getServerWorld()!=world){finish("owner_left_dimension");return;}
+            var heap=java.lang.management.ManagementFactory.getMemoryMXBean().getHeapMemoryUsage();
+            if(heap.getMax()>0 && heap.getUsed()>heap.getMax()*0.95){if(pressureAt==0)pressureAt=now;else if(now-pressureAt>10_000_000_000L){finish("sustained_heap_pressure");return;}}else pressureAt=0;
+            if(structureSearch!=null){
+                if(optionalStructures.contains(stage) && now-preparationAt>=plan.optionalModStructureSearchSeconds*1_000_000_000L){result().put("optionalSearchBudgetSeconds",plan.optionalModStructureSearchSeconds);skip("skipped_optional_structure_search_budget");return;}
+                if(now-heartbeat>30_000_000_000L){finish("client_heartbeat_timeout_during_structure_search");return;}
+                structureSearch.tick();result().put("structureSearch",structureSearch.progress());
+                if(structureSearch.unavailable()!=null){skip(structureSearch.unavailable());return;}
+                var located=structureSearch.found();
+                if(located!=null){lastStructure=located.position();x=lastStructure.getX();z=lastStructure.getZ();result().put("locatedStructure",located.structure().getKey().orElseThrow().getValue().toString());result().put("structureLocateMs",(System.nanoTime()-preparationAt)/1e6);structureSearch.close();structureSearch=null;readyAt=0;prepareStage(p);return;}
+                if(now-searchProgressAt>=2_000_000_000L){searchProgressAt=now;send(6);checkpoint();}return;
+            }
+            if(readyAt==0){if(now-preparedAt>120_000_000_000L)finish("client_loading_timeout");return;}
+            if(now-heartbeat>30_000_000_000L){finish("client_heartbeat_timeout");return;}
+            ticks++;
+            if(stage.mode.equals("inventory") && !ItemStack.areEqual(p.getInventory().getStack(0),lastHotbar)){lastHotbar=p.getInventory().getStack(0).copy();ChunkMetrics.count(world,"inventoryHotbarChanges",1);}
+            if(Set.of("chest","lootr").contains(stage.mode)){int items=inventoryItems(p);if(items>lastInventoryItems)ChunkMetrics.count(world,"lootItemsReceived",items-lastInventoryItems);lastInventoryItems=items;}
+            if(p.currentScreenHandler!=p.playerScreenHandler && p.currentScreenHandler.syncId!=lastContainerId){lastContainerId=p.currentScreenHandler.syncId;ChunkMetrics.count(world,"containerSessionsOpened",1);}
+            if(ticks%20==0) {
+                if(Set.of("combat","effects","bloodmoon","wither").contains(stage.mode)){int alive=(int)actors.stream().filter(e->e.getType().equals(Registries.ENTITY_TYPE.get(new Identifier(stage.target))) && e.isAlive()).count();if(alive<stage.count)spawn(Registries.ENTITY_TYPE.get(new Identifier(stage.target)),Math.min(8,stage.count-alive));actors.removeIf(Entity::isRemoved);send(3);}
 
-        Map<String,Object> worldSnapshot() {
-            ServerPlayerEntity p = player(); ServerWorld w = world();
-            if (p == null || w == null) return Map.of("available", false);
-            return Map.of(
-                    "dimension", w.getRegistryKey().getValue().toString(),
-                    "loadedChunkCount", w.getChunkManager().getLoadedChunkCount(),
-                    "player", Map.of("x", p.getX(), "y", p.getY(), "z", p.getZ())
-            );
+                int owned=0;for(Entity entity:world.iterateEntities())if(entity.getCommandTags().contains(tag()))owned++;
+                if(owned>384){finish("test_entity_limit_384");return;}
+                result().put("peakOwnedEntities",Math.max(owned,((Number)result().getOrDefault("peakOwnedEntities",0)).intValue()));
+                if(stage.mode.equals("effects"))for(Entity entity:actors)if(entity instanceof MobEntity mob && mob.isAlive()){mob.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(net.minecraft.entity.effect.StatusEffects.SPEED,80));mob.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(net.minecraft.entity.effect.StatusEffects.REGENERATION,80));ChunkMetrics.count(world,"benchmarkEffectApplications",2);}
+                if(stage.mode.equals("bloodmoon")){boolean moon=BloodMoonAdapter.isActiveInWorld(world);result().put("bloodMoonActiveObserved",Boolean.TRUE.equals(result().get("bloodMoonActiveObserved")) || moon);}
+                if(stage.mode.equals("tnt") && ticks<=stage.count*20){BlockPos site=tntSites.get(ticks/20-1);TntEntity tnt=new TntEntity(world,site.getX()+.5,site.getY(),site.getZ()+.5,p);tnt.setFuse(40);tnt.addCommandTag(tag());actors.add(tnt);world.spawnEntity(tnt);}
+                if(stage.mode.equals("teleport") && ticks%100==0){p.teleport(world,x+(ticks%200==0?0:384),y,z,0,20);ChunkMetrics.count(world,"nativeTeleports",1);send(3);}
+            }
+            if(stage.mode.equals("save") && ticks==40){long at=System.nanoTime();server.save(false,true,true);result().put("explicitWorldSaveMs",(System.nanoTime()-at)/1e6);ChunkMetrics.count(world,"explicitWorldSaves",1);}
+            result().put("status","measuring");
+            if(now-readyAt>=stage.seconds*1_000_000_000L){complete("measured");next();}
         }
-    }
-
-    private record PlayerSnapshot(String dimension, double x, double y, double z, float yaw, float pitch,
-                                  int gameMode, boolean flying, boolean allowFlying, boolean invulnerable,
-                                  float flySpeed, float walkSpeed, int selectedSlot, String inventory) {
-        static PlayerSnapshot capture(ServerPlayerEntity p) {
-            PlayerAbilities a = p.getAbilities();
-            return new PlayerSnapshot(
-                    p.getWorld().getRegistryKey().getValue().toString(), p.getX(), p.getY(), p.getZ(), p.getYaw(), p.getPitch(),
-                    p.interactionManager.getGameMode().getId(), a.flying, a.allowFlying, a.invulnerable,
-                    a.getFlySpeed(), a.getWalkSpeed(), p.getInventory().selectedSlot, inventorySignature(p)
-            );
+        void skip(String reason){complete(reason);try{next();}catch(Exception e){throw new IllegalStateException(e);}}
+        void complete(String status) {
+            result().put("status",status);result().put("elapsedSeconds",(System.nanoTime()-phaseAt)/1e9);result().put("actionWindowSeconds",readyAt==0?0:(System.nanoTime()-readyAt)/1e9);result().put("worldAtEnd",snapshot());
+            if(profiling){result().put("server",ServerDiagnostics.finishRecording());profiling=false;}
+            if(chunks!=null){result().put("chunkAndMechanicMetrics",chunks.finish());chunks=null;}
+            result().put("serverWorkloadValidation",status.startsWith("skipped")?"not_exercised_skipped":validate());result().put("measurementStatus",status);
+            ServerPlayerEntity notified=player();if(notified!=null)notified.sendMessage(Text.literal("[Smooth Fix Advanced "+(phase+1)+"/"+stages.size()+"] "+stage.name+" — "+status+"; validasi server: "+result().get("serverWorkloadValidation")),false);
+            if(status.equals("measured"))result().put("status","measured_pending_client_report");send(2);classify(result());checkpoint();
         }
-
-        Map<String,Object> compare(ServerPlayerEntity p) {
-            PlayerSnapshot now = capture(p);
-            Map<String,Object> m = new LinkedHashMap<>();
-            m.put("inventory", inventory.equals(now.inventory));
-            m.put("selectedHotbarSlot", selectedSlot == now.selectedSlot);
-            m.put("dimension", dimension.equals(now.dimension));
-            m.put("location", Math.abs(x-now.x)<.01 && Math.abs(y-now.y)<.01 && Math.abs(z-now.z)<.01);
-            m.put("rotation", Math.abs(yaw-now.yaw)<.01 && Math.abs(pitch-now.pitch)<.01);
-            m.put("gameMode", gameMode == now.gameMode);
-            m.put("abilities", flying==now.flying && allowFlying==now.allowFlying && invulnerable==now.invulnerable && Math.abs(flySpeed-now.flySpeed)<.0001 && Math.abs(walkSpeed-now.walkSpeed)<.0001);
-            boolean all = m.values().stream().allMatch(Boolean.TRUE::equals);
-            m.put("all", all);
-            return m;
+        String validate() {
+            if(stage.mode.equals("bloodmoon"))return Boolean.TRUE.equals(result().get("bloodMoonActiveObserved"))?"event_active_observed":"event_not_observed_active";
+            Map<?,?> metrics=(Map<?,?>)result().get("chunkAndMechanicMetrics");Map<?,?> counts=metrics==null?Map.of():(Map<?,?>)metrics.get("mechanicCounters");
+            if(stage.mode.equals("cold_route")){Map<?,?> unique=metrics==null?Map.of():(Map<?,?>)metrics.get("uniqueChunksByHook");return unique.get("featureGeneration") instanceof Number n && n.intValue()>0?"feature_generation_observed":"not_validated_as_new_chunks";}
+            if(Set.of("chest","lootr").contains(stage.mode))return counts.containsKey("lootItemsReceived")?"native_open_and_loot_received":counts.containsKey("containerSessionsOpened")?"container_opened_no_loot_received":"container_not_opened";
+            if(stage.mode.equals("structure")){Object located=result().get("locatedStructure");Map<?,?> context=(Map<?,?>)result().get("worldAtEnd");Map<?,?> starts=context==null?null:(Map<?,?>)context.get("nearbyLoadedStructureStarts");return located!=null && starts!=null && starts.containsKey(located)?"structure_start_loaded":"located_only_structure_not_loaded";}
+            if(stage.mode.equals("combat"))return counts.containsKey("playerHitsAccepted")?"player_damage_accepted":"no_player_damage_observed";
+            if(stage.mode.equals("tnt"))return counts.containsKey("explosions") && counts.containsKey("explosionDestroyedBlocks")?"native_explosion_and_terrain_destruction_observed":"explosion_or_terrain_destruction_not_observed";
+            if(stage.mode.equals("wither"))return counts.containsKey("explosions")?"native_explosions_observed":"explosions_not_observed";
+            if(stage.mode.equals("break"))return counts.containsKey("playerBlocksBroken")?"native_block_break_observed":"no_block_break_observed";
+            if(stage.mode.equals("inventory"))return counts.containsKey("inventoryHotbarChanges")?"inventory_changes_observed":"no_inventory_changes_observed";
+            if(stage.mode.equals("effects"))return counts.containsKey("benchmarkEffectApplications")?"native_status_effects_observed":"status_effects_not_observed";
+            if(stage.mode.equals("save"))return counts.containsKey("explicitWorldSaves")?"native_world_save_observed":"world_save_not_observed";
+            if(stage.mode.equals("teleport"))return counts.containsKey("nativeTeleports")?"native_teleports_observed":"teleports_not_observed";
+            if(stage.mode.equals("weather"))return world.isRaining()?"native_rain_observed":"rain_not_observed";
+            return "see_stage_context_and_client_actions";
         }
-    }
-
-    private static String inventorySignature(ServerPlayerEntity p) {
-        return p.getInventory().writeNbt(new NbtList()).toString();
-    }
-
-    private static Map<String,Integer> posMap(BlockPos pos) {
-        return Map.of("x", pos.getX(), "y", pos.getY(), "z", pos.getZ());
+        void classify(Map<String,Object> result) {
+            String status=String.valueOf(result.get("status"));
+            if(status.startsWith("skipped") || !"measured".equals(result.get("measurementStatus")))return;
+            if(!(result.get("client") instanceof JsonObject client)){result.put("status","measured_pending_client_report");return;}
+            String serverValidation=String.valueOf(result.get("serverWorkloadValidation"));
+            boolean serverPassed=!Set.of("not_validated_as_new_chunks","container_opened_no_loot_received","container_not_opened","located_only_structure_not_loaded","no_player_damage_observed","explosions_not_observed","explosion_or_terrain_destruction_not_observed","no_block_break_observed","no_inventory_changes_observed","event_not_observed_active","status_effects_not_observed","world_save_not_observed","teleports_not_observed","rain_not_observed").contains(serverValidation);
+            boolean clientPassed=client.has("workloadValidated") && client.get("workloadValidated").getAsBoolean();
+            result.put("status",!serverPassed?"failed_server_workload_verification":!clientPassed?"failed_client_workload_verification":"passed");
+        }
+        void refreshOutcome(){
+            report.put("summary",BenchmarkOutcome.counts(results));
+            if("completed".equals(terminationReason))report.put("status",BenchmarkOutcome.status(results));
+        }
+        Map<String,Object> snapshot() {
+            Map<String,Integer> entities=new TreeMap<>(),blockEntities=new TreeMap<>(),structures=new TreeMap<>();
+            for(Entity entity:world.iterateEntities())entities.merge(Registries.ENTITY_TYPE.getId(entity.getType()).toString(),1,Integer::sum);
+            int cx=MathHelper.floor(x)>>4,cz=MathHelper.floor(z)>>4;var registry=world.getRegistryManager().get(RegistryKeys.STRUCTURE);
+            for(int dx=-4;dx<=4;dx++)for(int dz=-4;dz<=4;dz++){Chunk chunk=world.getChunkManager().getChunk(cx+dx,cz+dz,ChunkStatus.FULL,false);if(chunk instanceof WorldChunk full){for(BlockEntity be:full.getBlockEntities().values())blockEntities.merge(String.valueOf(Registries.BLOCK_ENTITY_TYPE.getId(be.getType())),1,Integer::sum);full.getStructureStarts().forEach((type,start)->{if(start.hasChildren())structures.merge(String.valueOf(registry.getId(type)),1,Integer::sum);});}}
+            Map<String,Object> out=new LinkedHashMap<>();out.put("dimension",world.getRegistryKey().getValue().toString());out.put("loadedChunks",world.getChunkManager().getLoadedChunkCount());out.put("entitiesByType",entities);out.put("nearbyLoadedBlockEntities",blockEntities);out.put("nearbyLoadedStructureStarts",structures);out.put("contextRadiusChunks",4);out.put("timeOfDay",world.getTimeOfDay());out.put("raining",world.isRaining());
+            ServerPlayerEntity p=player();if(p!=null)out.put("playerPosition",Map.of("x",p.getX(),"y",p.getY(),"z",p.getZ()));return out;
+        }
+        int inventoryItems(ServerPlayerEntity p){int count=0;for(int i=0;i<36;i++)count+=p.getInventory().getStack(i).getCount();return count;}
+        void cleanup() {
+            if(structureSearch!=null){result().put("structureSearch",structureSearch.progress());structureSearch.close();structureSearch=null;}
+            ServerPlayerEntity p=player();if(p!=null){p.closeHandledScreen();BenchmarkAbilities.revoke(p);}
+            for(ServerWorld w:server.getWorlds()){List<Entity> owned=new ArrayList<>();for(Entity entity:w.iterateEntities())for(String t:entity.getCommandTags())if(t.startsWith(TAG+id+":")){owned.add(entity);break;}for(Entity e:owned)e.discard();}
+            actors.clear();tntSites.clear();if(fixture!=null && world!=null){world.setBlockState(fixture,fixtureOriginal);fixture=null;fixtureOriginal=null;}
+        }
+        void checkpoint(){try{BenchmarkRecovery.atomic(file,GSON.toJson(report));}catch(Exception e){throw new IllegalStateException("Checkpoint write failed",e);}}
+        void finish(String reason){finish(reason,player());}
+        void finish(String reason,ServerPlayerEntity recovering) {
+            if(ending)return;ending=true;
+            try{if(phase>=0 && phase<results.size() && profiling)complete(reason);}catch(Exception e){SmoothFix.LOGGER.error("Could not finalize advanced stage",e);}
+            try{send(0);cleanup();}catch(Exception e){SmoothFix.LOGGER.error("Could not clean advanced actors",e);}
+            if(profiling){ServerDiagnostics.finishRecording();profiling=false;}if(chunks!=null){chunks.finish();chunks=null;}
+            terminationReason=reason;report.put("terminationReason",reason);report.put("status",reason);refreshOutcome();report.put("elapsedSeconds",(System.nanoTime()-started)/1e9);
+            report.put("playerRestored",recovering!=null && BenchmarkRecovery.restore(recovering));report.put("recoveryVerification",BenchmarkRecovery.lastVerification(owner));report.put("environmentRestored",AdvancedWorldRecovery.restore(server));
+            BenchmarkFinalization.send(recovering,id,report,this::checkpoint);
+            if(recovering!=null)recovering.sendMessage(Text.literal("[Smooth Fix Advanced] "+report.get("status")+". Recovery server: "+report.get("playerRestored")+". Laporan: "+file.getFileName()),false);
+            try{checkpoint();SmoothFix.LOGGER.info("Advanced benchmark {}: {}",reason,file);}catch(Exception e){SmoothFix.LOGGER.error("Final advanced checkpoint failed",e);}
+            completed=this;completedAt=System.nanoTime();active=null;
+        }
     }
 }

@@ -42,6 +42,7 @@ public class ClientRuntimeCheck {
         new org.marj4n.smooth_fix.diagnostics.ClientDiagnostics().onInitializeClient();
         System.out.println("SMOOTHFIX_VERIFY_PASS client benchmark packets, tick controller and command registration linked");
         try {
+            if(net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("emi"))AdvancedClientCheck.run();
             if(net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("saintsdragons")) {
                 Class.forName("com.leon.saintsdragons.client.camera.IgnivorusSkyfallScreenEffects",false,ClientRuntimeCheck.class.getClassLoader());
                 System.out.println("SMOOTHFIX_VERIFY_PASS production Saints Dragons Skyfall class transformed");

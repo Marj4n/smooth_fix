@@ -39,6 +39,12 @@ public final class SmoothFixMixinPlugin implements IMixinConfigPlugin {
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
         SmoothFixConfig config = SmoothFixConfig.get();
 
+        if (mixinClassName.endsWith("EmiBenchmarkSearchMixin")) return config.diagnostics && loaded("emi");
+        if (mixinClassName.endsWith("ServerChunkFutureAccess") || mixinClassName.endsWith("ChunkBenchmarkTimingMixin") || mixinClassName.endsWith("FeatureBenchmarkTimingMixin")
+                || mixinClassName.endsWith("ExplosionBenchmarkMixin") || mixinClassName.endsWith("BenchmarkDropOwnershipMixin")
+                || mixinClassName.endsWith("HandledScreenPositionAccess") || mixinClassName.endsWith("BenchmarkScreenRenderMixin")
+                || mixinClassName.endsWith("BenchmarkTooltipMixin") || mixinClassName.endsWith("BenchmarkInputMixin") || mixinClassName.endsWith("BenchmarkAutoJumpMixin")) return config.diagnostics;
+
         if (mixinClassName.endsWith("BewitchmentSigilMarkerMixin")) return config.bewitchmentSigilSearchFix && loaded("bewitchment");
         if (mixinClassName.endsWith("TrinketGroupRegexMixin")) return config.trinketsRegexAllocationFix && loaded("tclayer");
         if (mixinClassName.endsWith("TrinketSnapshotMarkerMixin")) return config.trinketsSnapshotAllocationFix && loaded("tclayer");

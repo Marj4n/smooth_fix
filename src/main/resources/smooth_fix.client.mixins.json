@@ -11,7 +11,13 @@
     "EmiRepairIngredientMixin",
     "ModelPartAllocationMixin",
     "ClientFrameTimingMixin",
-    "DragonScanMarkerMixin"
+    "DragonScanMarkerMixin",
+    "HandledScreenPositionAccess",
+    "BenchmarkScreenRenderMixin",
+    "EmiBenchmarkSearchMixin",
+    "BenchmarkTooltipMixin",
+    "BenchmarkInputMixin",
+    "BenchmarkAutoJumpMixin"
   ],
   "injectors": {
     "defaultRequire": 0

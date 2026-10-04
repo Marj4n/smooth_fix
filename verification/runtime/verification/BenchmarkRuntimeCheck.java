@@ -24,7 +24,7 @@ public final class BenchmarkRuntimeCheck implements ModInitializer {
     private long deadline;
     private double originalX,originalY,originalZ;
     @Override public void onInitialize(){
-        if(FabricLoader.getInstance().getEnvironmentType()!=EnvType.SERVER)return;
+        if(FabricLoader.getInstance().getEnvironmentType()!=EnvType.SERVER || Boolean.getBoolean("smoothfix.verify.advanced"))return;
         ServerLifecycleEvents.SERVER_STARTED.register(this::start);
         ServerTickEvents.END_SERVER_TICK.register(this::tick);
     }

@@ -18,25 +18,28 @@ public final class ClientBenchmark {
     private static Session active;
     private ClientBenchmark() { }
     public static void install() {
+        ClientBenchmarkReports.install();
         ClientPlayNetworking.registerGlobalReceiver(BenchmarkProtocol.CONTROL,(client,handler,buf,sender)->{
             int action=buf.readUnsignedByte();UUID run=buf.readUuid();int phase=buf.readInt();String name=buf.readString(),mode=buf.readString(),dimension=buf.readString();double x=buf.readDouble(),y=buf.readDouble(),z=buf.readDouble();
             client.execute(()->{
                 if(action==1) {
                     if(active!=null){active.finishStage(client);release(client);}
                     if(ClientFrameProfiler.isActive()){respond(run,phase,0,"manual frame profile is running");return;}
+                    try{ClientBenchmarkReports.begin(run,"legacy");}catch(Exception e){respond(run,phase,0,"run report could not start: "+e);return;}
                     active=new Session(run,phase,name,mode,dimension,x,y,z);
                 } else if(active!=null && active.run.equals(run)) {
-                    if(action==0){active.finishStage(client);release(client);active=null;return;}
+                    if(action==0){active.finishStage(client);release(client);active=null;ClientBenchmarkReports.end("awaiting_server_result");return;}
                     if(active.phase!=phase)return;
-                    if(action==2){if(!active.startup.isReady() || !ClientFrameProfiler.start(client,600)){active.abort(client,"frame profiler could not start");return;}active.measuring=true;}
+                    if(action==2){if(!active.startup.isReady() || !ClientFrameProfiler.startBenchmark(client,600)){active.abort(client,"frame profiler could not start");return;}active.measuring=true;}
                     if(action==3){active.x=x;active.y=y;active.z=z;}
                 }
             });
         });
         ClientTickEvents.START_CLIENT_TICK.register(ClientBenchmark::tick);
-        ClientPlayConnectionEvents.DISCONNECT.register((handler,client)->{if(active!=null){active.finishStage(client);release(client);active=null;}});
+        ClientPlayConnectionEvents.DISCONNECT.register((handler,client)->{if(active!=null){active.finishStage(client);release(client);active=null;}ClientBenchmarkReports.end("disconnected");});
     }
     public static boolean stop(MinecraftClient client) {
+        if(AdvancedClient.stop(client))return true;
         if(active==null)return false;active.abort(client,"stopped on client",4);return true;
     }
     private static void respond(UUID run,int phase,int action,String data) {
@@ -85,12 +88,12 @@ public final class ClientBenchmark {
         double x,y,z;long started,lastHeartbeat;boolean measuring;
         Session(UUID run,int phase,String name,String mode,String dimension,double x,double y,double z){this.run=run;this.phase=phase;this.name=name;this.mode=mode;this.dimension=dimension;this.x=x;this.y=y;this.z=z;}
         void abort(MinecraftClient client,String reason){abort(client,reason,0);}
-        void abort(MinecraftClient client,String reason,int action){respond(run,phase,action,reason);finishStage(client);release(client);active=null;if(client.player!=null)client.player.sendMessage(Text.literal("Smooth Fix benchmark stopped: "+reason),false);}
+        void abort(MinecraftClient client,String reason,int action){respond(run,phase,action,reason);finishStage(client);release(client);active=null;ClientBenchmarkReports.end(reason);if(client.player!=null)client.player.sendMessage(Text.literal("Smooth Fix benchmark stopped: "+reason),false);}
         void finishStage(MinecraftClient client) {
             if(!measuring)return;measuring=false;
             Map<String,Object> report=new LinkedHashMap<>(ClientFrameProfiler.finishNow());report.put("runId",run.toString());report.put("phase",phase);report.put("stage",name);report.put("controller",mode);
             try {
-                String file=MemoryReport.write("benchmark_client",report).toString();
+                String file=ClientBenchmarkReports.stage(run,phase,report);
                 Map<String,Object> summary=new LinkedHashMap<>();summary.put("localReportFile",file);
                 for(String key:List.of("elapsedSeconds","frameIntervals","frameWorkBeforePresent","heapBytes","garbageCollectors","garbageCollectorDeltas","memoryAtStart","sceneAtStart","sceneAtEnd","error"))if(report.containsKey(key))summary.put(key,report.get(key));
                 String data=GSON.toJson(summary);if(data.length()<=24000)respond(run,phase,2,data);
