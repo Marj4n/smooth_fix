@@ -61,6 +61,41 @@ public final class GroundNavigationCheck {
             }
             if(player.getX()<sx+2 || player.getY()<y+.9 || pulses==0 || pulses>3)throw new AssertionError("one-block native jump failed or spammed: "+player.getPos()+" pulses="+pulses+" state="+stairFollower.status());
             System.out.println("SMOOTHFIX_VERIFY_PASS production follower climbs one-block platform through native jump/travel with bounded jump pulses");
+            // A changing ledge and native inertia must never carry the follower off this island.
+            for(int dx=-13;dx<=13;dx++)for(int dz=-13;dz<=13;dz++){
+                set.accept(new BlockPos(ox+dx,y-1,oz+dz),Math.abs(dx)<=3 && Math.abs(dz)<=3?Blocks.STONE.getDefaultState():Blocks.AIR.getDefaultState());
+                for(int dy=0;dy<3;dy++)set.accept(new BlockPos(ox+dx,y+dy,oz+dz),Blocks.AIR.getDefaultState());
+            }
+            player.setPosition(ox+.5,y,oz+.5);player.setVelocity(net.minecraft.util.math.Vec3d.ZERO);player.setOnGround(true);
+            var edgeFollower=new GroundNavigator();var edgeMetrics=new ActionMetrics();
+            for(int tick=0;tick<350;tick++){
+                if(tick==90)set.accept(new BlockPos(ox+3,y-1,oz),Blocks.AIR.getDefaultState());
+                var input=edgeFollower.tick(world,player,ox+30,oz+.5,edgeMetrics);player.setSprinting(input.sprint());
+                if(input.jump())((LivingJumpAccess)player).fixtureJump();player.travel(new net.minecraft.util.math.Vec3d(0,0,input.forward()?1:0));
+                if(player.getY()<y-.05 || Math.abs(player.getX()-(ox+.5))>3.5 || Math.abs(player.getZ()-(oz+.5))>3.5)throw new AssertionError("native follower fell off island: "+player.getPos());
+            }
+            System.out.println("SMOOTHFIX_VERIFY_PASS native player travel remains on small End-style island despite unreachable target, changing ledge and movement inertia");
+            // Caves can require moving away from the requested heading. Roaming explores reachable alternatives.
+            var caveStart=new GroundRoutePlanner.Point(ox,y,oz);var cave=new GroundRoutePlanner.Search((from,dx,dz)->{
+                int nx=from.x()+dx,nz=from.z()+dz;return nx>=ox-10 && nx<=ox && Math.abs(nz-oz)<=1?new GroundRoutePlanner.Point(nx,y,nz):null;
+            },caveStart,ox+8,oz,true);for(int tick=0;tick<80 && !cave.advance(12,750_000L);tick++);var cavePath=cave.path();
+            if(cavePath.isEmpty() || cavePath.get(cavePath.size()-1).x()>ox-7)throw new AssertionError("roaming remained stuck facing unreachable cave direction");
+            System.out.println("SMOOTHFIX_VERIFY_PASS bounded cave roaming chooses reachable path away from blocked preferred direction");
+            // Actual water block states + native buoyancy/travel, not a velocity-only mock.
+            for(int dx=-5;dx<=5;dx++)for(int dz=-5;dz<=5;dz++){
+                for(int dy=-3;dy<=0;dy++)set.accept(new BlockPos(ox+dx,y+dy,oz+dz),dy==-3?Blocks.STONE.getDefaultState():Blocks.WATER.getDefaultState());
+            }
+            player.setPosition(ox+.5,y-1,oz+.5);player.setVelocity(net.minecraft.util.math.Vec3d.ZERO);player.setOnGround(false);player.baseTick();
+            var waterFollower=new GroundNavigator();var waterMetrics=new ActionMetrics();boolean swam=false;
+            double waterStartX=player.getX(),waterStartY=player.getY();
+            for(int tick=0;tick<100;tick++){
+                player.baseTick();var input=waterFollower.tick(world,player,ox+3.5,oz+.5,waterMetrics);
+                if(player.isTouchingWater() && input.jump()){((LivingJumpAccess)player).fixtureSwimUpward(net.minecraft.registry.tag.FluidTags.WATER);swam=true;}
+                player.travel(new net.minecraft.util.math.Vec3d(0,0,input.forward()?1:0));
+            }
+            if(!swam || player.getY()<=waterStartY+.25 || Math.abs(player.getX()-waterStartX)<.5)throw new AssertionError("native water movement did not surface/travel: "+player.getPos()+" "+waterFollower.status());
+            var waterPoint=terrain.step(new GroundRoutePlanner.Point(ox,y,oz),1,0);if(waterPoint==null)throw new AssertionError("surface water route rejected");
+            System.out.println("SMOOTHFIX_VERIFY_PASS production navigator follows native water terrain with swim-upward and player travel; surfaces and moves horizontally, lava remains rejected");
         } finally {player.setPosition(saved.x,saved.y,saved.z);player.setYaw(savedYaw);player.setPitch(savedPitch);player.setSprinting(false);player.setVelocity(net.minecraft.util.math.Vec3d.ZERO);player.getAbilities().flying=flying;}
         } finally {original.forEach((pos,state)->world.setBlockState(pos,state));}
         System.out.println("SMOOTHFIX_VERIFY_PASS native ground collision path detours around tall wall; one-block step and half-slab recognized; low ceiling, pit, lava and unavailable chunks rejected without chunk loading");

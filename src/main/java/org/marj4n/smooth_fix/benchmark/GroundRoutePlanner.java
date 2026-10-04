@@ -1,6 +1,7 @@
 package org.marj4n.smooth_fix.benchmark;
 
 import java.util.*;
+import java.util.function.ToDoubleFunction;
 
 /** Incremental, bounded A* over standing positions; no world generation or teleporting. */
 public final class GroundRoutePlanner {
@@ -17,11 +18,26 @@ public final class GroundRoutePlanner {
         private final Set<Point> closed = new HashSet<>();
         private Point best;
         private boolean done;
+        private final boolean roam;
+        private final ToDoubleFunction<Point> frontierScore;
         public Search(Terrain terrain, Point start, double targetX, double targetZ) {
+            this(terrain,start,targetX,targetZ,false);
+        }
+        public Search(Terrain terrain, Point start, double targetX, double targetZ,boolean roam) {
+            this(terrain, start, targetX, targetZ, roam, point -> 0);
+        }
+        public Search(Terrain terrain, Point start, double targetX, double targetZ, boolean roam, ToDoubleFunction<Point> frontierScore) {
+            this.roam=roam;
+            this.frontierScore = frontierScore;
             this.terrain = terrain; this.start = best = start; this.targetX = targetX; this.targetZ = targetZ;
             costs.put(start, 0.0); open.add(new Entry(start, 0, heuristic(start)));
         }
         private double heuristic(Point point) { return Math.hypot(point.x + .5 - targetX, point.z + .5 - targetZ); }
+        private double roamScore(Point p) {
+            double distance=Math.hypot(p.x-start.x,p.z-start.z);
+            if(distance>9)return Double.NEGATIVE_INFINITY;
+            return distance + frontierScore.applyAsDouble(p) + .2*((p.x-start.x)*(targetX-start.x)+(p.z-start.z)*(targetZ-start.z))/Math.max(1,Math.hypot(targetX-start.x,targetZ-start.z));
+        }
         public boolean advance(int maximumNodes, long budgetNanos) {
             long deadline = System.nanoTime() + budgetNanos;
             for (int i = 0; !done && i < maximumNodes && System.nanoTime() < deadline; i++) {
@@ -29,8 +45,8 @@ public final class GroundRoutePlanner {
                 if (entry == null || closed.size() >= 256) { done = true; break; }
                 Point from = entry.point;
                 if (!closed.add(from)) continue;
-                if (heuristic(from) < heuristic(best)) best = from;
-                if (heuristic(from) < .65) { best = from; done = true; break; }
+                if (roam?roamScore(from)>roamScore(best):heuristic(from)<heuristic(best)) best = from;
+                if (!roam && heuristic(from) < .65) { best = from; done = true; break; }
                 for (int direction = 0; direction < 4; direction++) {
                     int dx = direction == 0 ? 1 : direction == 1 ? -1 : 0;
                     int dz = direction == 2 ? 1 : direction == 3 ? -1 : 0;

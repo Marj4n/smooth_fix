@@ -3,6 +3,7 @@ package org.marj4n.smooth_fix.diagnostics;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.text.Text;
 import org.marj4n.smooth_fix.SmoothFix;
+import org.marj4n.smooth_fix.config.SmoothFixConfig;
 
 
 import java.util.LinkedHashMap;
@@ -83,10 +84,12 @@ public final class ClientFrameProfiler {
         private final Thread renderThread = Thread.currentThread();
         private final int seconds;
         private final boolean automaticSave;
-        private final TimingSamples intervals = new TimingSamples(8_333_333L);
-        private final TimingSamples work = new TimingSamples(8_333_333L);
+        private final int targetFps;
+        private final long budgetNanos;
+        private final TimingSamples intervals;
+        private final TimingSamples work;
         private final StackSamples stacks = new StackSamples();
-        private final FrameTimeline timeline = new FrameTimeline();
+        private final FrameTimeline timeline;
         private final Map<String, Object> sceneStart;
         private final Map<String, Object> memoryStart;
         private final long started = System.nanoTime();
@@ -100,6 +103,12 @@ public final class ClientFrameProfiler {
             this.automaticSave = automaticSave;
             this.client = client;
             this.seconds = seconds;
+            int configured = SmoothFixConfig.get().diagnosticTargetFps;
+            this.targetFps = configured >= 15 && configured <= 360 ? configured : 120;
+            this.budgetNanos = 1_000_000_000L / targetFps;
+            this.intervals = new TimingSamples(budgetNanos);
+            this.work = new TimingSamples(budgetNanos);
+            this.timeline = new FrameTimeline(budgetNanos);
             this.sceneStart = scene(client);
             this.memoryStart = MemoryReport.snapshot("client");
         }
@@ -109,7 +118,7 @@ public final class ClientFrameProfiler {
             try {
                 while (!stop && (!automaticSave || System.nanoTime() < deadline) && client.isRunning()) {
                     long start = frameStart;
-                    if (working && System.nanoTime() - start > 8_333_333L) {
+                    if (working && System.nanoTime() - start > budgetNanos) {
                         StackTraceElement[] trace = renderThread.getStackTrace();
                         if (working && frameStart == start) {
                             stacks.add(trace);
@@ -138,7 +147,7 @@ public final class ClientFrameProfiler {
             report.put("frameWorkBeforePresent", work.snapshot());
             report.put("frameTimeline",timeline.snapshot());
             report.put("frameTimelineNote","Exact 1-second totals, up to 600 seconds, assigned by sample completion time. Includes loading/preparation in advanced stages. Empty buckets can indicate a long stall; no per-second percentiles or GPU measurements.");
-            report.put("sampler", Map.of("requestedSeconds",seconds,"intervalMs",10,"thresholdMs",8.333333));
+            report.put("sampler", Map.of("requestedSeconds",seconds,"intervalMs",10,"thresholdMs",budgetNanos/1_000_000.0,"targetFps",targetFps));
             report.put("slowFrameStacks", stacks.snapshot());
             report.put("measurementNote", "Entire recording totals; percentile reservoir is bounded to 8192. Work excludes presentation/FPS waits. Intervals include waits. GPU time is not measured. Sampling adds overhead. Stack estimates include error bounds; observations are not CPU percentages.");
             if (save) try {

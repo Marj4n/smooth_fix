@@ -1,0 +1,181 @@
+SMOOTH FIX 1.0.5 — ADVANCED6 SOURCE
+Internal build: 1.0.5-perf-r2-advanced7
+Minecraft 1.20.1 Fabric. Public version: 1.0.5-1.20.1.
+This revision has not been compiled or runtime-tested here. Build and test locally.
+
+BUILD AND RUN
+1. Use JDK 21 to run the supplied Gradle wrapper: .\gradlew clean build
+   The main mod output is build/libs/smooth_fix-1.0.5-1.20.1.jar (Java 17 bytecode).
+2. Replace the previous Smooth Fix JAR on both client and server; restart both.
+3. Open a disposable copy of the actual modpack save. The command does not make a backup.
+4. Run as an operator with only one player connected:
+   /smoothfix stress advanced start world-copy
+5. Status: /smoothfix stress advanced status
+6. Stop and restore the player: /smoothfix stress stop
+7. Keep Minecraft focused. Inventory, chest and EMI screens opened by the controller
+   are allowed. An unrelated screen or focus loss ends the measurement.
+
+TNT, Withers, mining, generated chunks, personal Lootr inventories, advancements and
+mod-global state can permanently change this save copy. Player recovery restores
+journaled state; it does not undo terrain, loot, advancements or arbitrary mod data.
+
+ACTUAL-WORLD SUITE
+The default has 21 core stages, each with 60 seconds of action, plus up to three
+optional registered mod structures: panorama, loaded route, new terrain route,
+route revisit, village, chest, Lootr, inventory/tooltips/hotbar, EMI search, EMI
+recipe, combat 32, effects 64, native Blood Moon, Withers 10, TNT 16, block breaking,
+weather, teleport, Nether, End and save. Optional structures run before save.
+The suite can take more than 21 minutes, plus loading and structure search.
+
+Configuration: config/smooth_fix/advanced_benchmark.json
+Stage duration: 10–300 seconds. Maximum mobs: 64; Withers: 10; TNT: 32.
+Keep an existing custom configuration. If an older file defines a shorter suite,
+rename it before starting to generate current defaults. Missing fields use defaults.
+Unavailable adapters, unsupported generation and unsuitable TNT terrain are skipped
+explicitly. A first successful action never ends the remaining stress window.
+
+BOTH STRESS CONTROLLERS
+The ordinary arena suite uses /smoothfix stress start. Other commands:
+/smoothfix stress status
+/smoothfix stress stop
+/smoothfix stress wither 10
+/smoothfix stress soak 30
+/smoothfix stress feature minecraft:zombie 32
+/smoothfix stress list
+
+Ordinary stages use 10 seconds of warm-up and 60 seconds of measurement in reserved
+benchmark dimensions. Advanced stages use the actual world copy. Both display an
+English HUD with stage/total, purpose, preparation or remaining time, and next stage.
+Chat announces stage results and recovery. HUD text ordering is cached between updates.
+
+MOVEMENT, CHESTS AND UI
+Ground navigation uses collision shapes from already loaded chunks. Incremental A*
+is limited to 12 nodes / a soft 0.75 ms budget per tick, 256 visited nodes and a
+12-block local horizon. One collision query can exceed the soft budget.
+Persistent waypoints, temporary blocked-waypoint avoidance and continuous footprint
+checks handle walls, slabs and ledges. Jump pulses are for one-block steps; native
+water buoyancy uses jump input. Nether/End roaming selects reachable local paths.
+The controller never holds sneak. Vanilla auto-jump is suppressed only while a
+benchmark controls input; user options and physical/toggle key state are preserved.
+Ladders, doors and every mod-specific movement mechanic are not covered.
+
+Route verification requires at least 12 horizontal blocks traveled, 8 blocks of
+maximum displacement (6 for patrol stages), and five movement samples. Corrections
+are excluded from distance. Small wall oscillations do not pass. Missing safe
+terrain remains a failed workload rather than being silently treated as success.
+
+Ordinary containers are checked for loot after resolving native loot tables. Lootr
+personal contents are checked after opening. Empty personal containers request a
+replacement, with bounded retries and a fixture fallback. Only occupied, takeable
+slots receive native QUICK_MOVE actions; changes must be observed before continuing.
+UI stages repeat interactions throughout the measurement. Inventory swaps and
+hotbar changes require observed updates. Tooltip timing uses the shared native
+component renderer, including item tooltips with optional data. EMI recipe output
+and current-worker search results must match the requested operation.
+
+STRUCTURE SEARCH
+Search starts at the player's position when the stage begins, with 10,000-block
+radius bands: 10,000 -> 20,000 -> 30,000 -> ... . The center stays fixed and each
+expansion checks only its new band. Mandatory village and manually configured
+structure targets continue until found, the world boundary is reached, or stopped.
+Automatically selected mod structures have a separate 90-second search budget,
+configured by optionalModStructureSearchSeconds (10–600). Expiration skips that
+optional stage and continues the suite; it does not limit mandatory village search.
+
+Village resolution includes village tags, mod village IDs and active village-set
+members, including datapack replacements. resolvedStructureTargets records them.
+structureSearchRadiusStepBlocks defaults to 10000. Native seed/placement candidates
+are requested one at a time through asynchronous STRUCTURE_STARTS futures. The
+controller does not join those futures in a server tick. Only a located destination
+is loaded fully before teleport. Native generation can still cause spikes.
+Search tickets are released on stop. World-context scans inspect loaded chunks only.
+
+Progress packets every two seconds renew preparation grace. Reports record radius,
+completed bands, candidate/region counts and elapsed time. The action stopwatch
+starts only after preparation and client readiness. Missing IDs, disabled generation,
+missing placements and exhausted world bounds produce explicit skipped outcomes.
+
+WORKLOAD VALIDATION
+Combat records damage received rather than merely counting attack packets. Mobs
+are replenished in bounded batches for the whole stress window. Native Blood Moon
+must be observed active; weather is cleared for it and journaled weather/forecast
+is restored afterward. TNT uses nearby dry loaded terrain and counts benchmark-owned
+explosions that actually turn non-air blocks into air. Wet/unsuitable terrain skips.
+Death recovery resumes the same stage and retains its recording. Repeated deaths
+have a limit; death/rescue events remain recorded and prevent an unqualified pass.
+Respawn reconnects the network handler to the replacement player entity.
+
+ONE REPORT PER RUN ON EACH SIDE
+Client: config/smooth_fix/reports/benchmark_client_<runId>.json
+Advanced server: <save>/smooth_fix/advanced_benchmarks/<runId>.json
+Ordinary server: use the path printed by the command/log.
+Each stage uses the same runId and its own phase inside stages[]. Checkpoints update
+that same client file. Frame timings, action latencies, errors, query failures,
+navigation and observations remain attached to their stage. Timeout, disconnect
+and stop preserve partial results. Manual profiles are separate files.
+
+completed: all measured workloads verified.
+completed_with_failures: at least one workload failed verification.
+completed_with_skips: at least one feature unavailable or not exercised.
+completed_pending_client_reports: required client results have not arrived.
+summary separates passed, failed, skipped and pending. A skip is not a successful test.
+
+RECOVERY
+A journal is written before player mutation and never overwrites unresolved recovery.
+Vanilla inventory including armor/offhand, selected slot, dimension, XYZ, yaw/pitch,
+game mode, flying/allowFlying/invulnerability, movement speeds, health, hunger and XP
+are restored and synchronized. Older recovery journals remain readable.
+recoveryVerification.all compares server state with the journal.
+clientRecoveryVerification compares the client's received state.
+recoveryVerifiedBothSides requires a matching client acknowledgement. These are
+separate checks: server restoration alone does not certify client synchronization.
+Failed client verification now includes expected/observed snapshots; comparisons
+remain strict. Disconnect can prevent acknowledgement. Arbitrary mod capabilities
+and external storage are not guaranteed to roll back.
+
+PERFORMANCE AND LOCAL COMPARISON
+120 FPS needs a frame interval near 8.33 ms. Compare p95/p99, maximum, over-budget
+counts, >100 ms stalls and frameTimeline, not just average FPS.
+frameWorkBeforePresent is render-thread wall time before present, not GPU time.
+frameIntervals includes cap/presentation waits. Stack samples identify observed
+paths, not CPU percentages. GC deltas are not a stop-the-world pause timeline.
+Server work has a 50 ms budget. tickStartIntervals also includes scheduled sleep,
+queued tasks and stalls outside callback timing; slight overages can be jitter.
+
+Recording starts before preparation so loading is retained. preparationMs and
+structureLocateMs are separate from actionWindowSeconds. Chunk metrics distinguish
+feature generation, NBT encode/decode and load/unload counts. None alone is the
+complete generation, disk-I/O or chunk-loading duration. A rerun can warm the route.
+
+Use copies of the same initial save, seed, route, settings, mod list and stage config
+for before/after comparison. Keep render/simulation distance, RAM and graphics
+settings unchanged. Advanced7 does not promise stable PC 120 FPS or mobile 30 FPS. Review
+REVIEW_ADVANCED6_20261004.md and VALIDATION.json for evidence and untested limits.
+
+PERFORMANCE PATCH TOGGLES
+config/smooth_fix.json adds accessoriesEmptyBufferFlushFix and emiSearchSafetyFix,
+both true by default. Restart after changing them. The first guards Accessories'
+pre-slot buffer flush only when every equipment/cosmetic slot is empty; equipped
+rendering and subsequent effect/UI flushes remain upstream. The second serializes
+EMI tag-cache access/reload and maps a null search tooltip to an empty tooltip.
+Ordinary non-null tooltips and tag semantics remain upstream.
+Benchmark death snapshots serialize inventory only when its live contents change.
+
+VERIFICATION STATUS
+This source revision was reviewed without compilation, dependency downloads or
+runtime fixtures, as requested. Historical fixture source is retained for optional
+local testing; its previous results do not validate these new changes. No mod JAR
+or host build/cache directories are included. The Gradle wrapper JAR is a build tool.
+
+ADVANCED7 PROFILE COMPARISON
+Use render distance 12 for both clients and view distance 12 on the server.
+PC: cap 120; diagnosticTargetFps 120; target budget 8.33 ms.
+Mobile: cap 30; diagnosticTargetFps 30; target budget 33.33 ms.
+The separate intervalOver8_33Ms/workOver8_33Ms timeline counters always refer to
+120 FPS, including on mobile. Use intervalOverTargetBudget/workOverTargetBudget
+and the explicit targetBudgetMs when judging the selected profile.
+The reduced graphics profiles intentionally differ from the supplied Advanced6
+run. Record the new settings and framebuffer size; do not claim an isolated code
+speedup from a comparison that also changes resolution, particles and distance.
+Stable FPS requires p95/p99, maxima and over-budget counts, not just average FPS.
+Keep launcher RAM and the rest of the modpack unchanged between new comparisons.

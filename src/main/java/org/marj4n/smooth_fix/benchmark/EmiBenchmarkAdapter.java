@@ -48,6 +48,7 @@ public final class EmiBenchmarkAdapter {
     /** The apply hook fires only after an accepted publication; verify the currently published list as well. */
     public static String acceptedQuery(Object worker,List<?> result) throws Exception {
         if(Class.forName("dev.emi.emi.search.EmiSearch").getField("stacks").get(null)!=result)return null;
-        Field query=worker.getClass().getDeclaredField("query");query.setAccessible(true);return (String)query.get(worker);
+        return workerQuery(worker);
     }
+    public static String workerQuery(Object worker)throws Exception {Field query=worker.getClass().getDeclaredField("query");query.setAccessible(true);return (String)query.get(worker);}
 }

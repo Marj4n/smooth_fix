@@ -30,7 +30,7 @@ public final class AdvancedClientCheck {
         data.addProperty("mode","structure");data.addProperty("prepared",false);Object waiting=newSession.newInstance(data);field(session,"preparationProgressAt").setLong(waiting,System.nanoTime()-126_000_000_000L);data.addProperty("searchingStructure",true);data.add("structureSearch",JsonParser.parseString("{\"radiusBlocks\":20000}"));update.invoke(waiting,data);
         if(field(session,"prepared").getBoolean(waiting) || System.nanoTime()-field(session,"preparationProgressAt").getLong(waiting)>1_000_000_000L)throw new AssertionError("search progress incorrectly starts workload or fails to renew loading grace");
         System.out.println("SMOOTHFIX_VERIFY_PASS structure-search progress extends preparation grace without starting client workload");
-        verifyInputAndRouteValidation(newSession,session,data,validated);verifyRecipeOutputs();verifyFinishedReports();
+        verifyLegacyInputAndCursor();verifyInputAndRouteValidation(newSession,session,data,validated);verifyRecipeOutputs();verifyFinishedReports();
         System.out.println("SMOOTHFIX_VERIFY_PASS advanced UI mixin classes link; actual EMI accepted/stale result hooks; inventory validation rejects attempts without observed swap/tooltip; stage preparation gate");
     }
     private static void verifyInputAndRouteValidation(Constructor<?> constructor,Class<?> session,JsonObject data,Method validated)throws Exception {
@@ -63,6 +63,19 @@ public final class AdvancedClientCheck {
         if((boolean)validated.invoke(s))throw new AssertionError("oscillation at a wall still validates a route");field(GroundNavigator.class,"extent").setDouble(navigator,9);
         if(!(boolean)validated.invoke(s))throw new AssertionError("meaningful observed route rejected");
         System.out.println("SMOOTHFIX_VERIFY_PASS production KeyBinding mixin drives native KeyboardInput for 60 ticks without sticky sneak/jump; neutral preparation clears input; inactive physical toggle and auto-jump option state preserved; route validation rejects 4.6-block stall and wall oscillation");
+    }
+    private static void verifyLegacyInputAndCursor()throws Exception {
+        var mouse=(net.minecraft.client.Mouse)allocate(net.minecraft.client.Mouse.class);
+        var cursor=(org.marj4n.smooth_fix.mixin.client.BenchmarkMouseAccess)mouse;cursor.smoothfix$setX(123);cursor.smoothfix$setY(456);
+        if(mouse.getX()!=123 || mouse.getY()!=456)throw new AssertionError("automated cursor model not updated");
+        Class<?> session=Class.forName("org.marj4n.smooth_fix.benchmark.ClientBenchmark$Session");var constructor=session.getDeclaredConstructor(UUID.class,int.class,String.class,String.class,String.class,double.class,double.class,double.class);constructor.setAccessible(true);
+        Object legacy=constructor.newInstance(UUID.randomUUID(),0,"baseline","orbit","minecraft:overworld",0,70,0);
+        var forward=new net.minecraft.client.option.KeyBinding("legacy_forward",0,"fixture");var sneak=new net.minecraft.client.option.StickyKeyBinding("legacy_sneak",340,"fixture",()->true);sneak.setPressed(true);
+        field(session,"forward").set(legacy,forward);field(session,"sneak").set(legacy,sneak);field(session,"input").set(legacy,new GroundNavigator.Input(true,false,true));field(ClientBenchmark.class,"active").set(null,legacy);
+        if(!forward.isPressed() || sneak.isPressed())throw new AssertionError("legacy input leaked sticky sneak");field(ClientBenchmark.class,"active").set(null,null);
+        if(!sneak.isPressed())throw new AssertionError("legacy benchmark modified user key state");
+        if(AdvancedStageInfo.legacyTask("baseline","orbit").equals(AdvancedStageInfo.legacyTask("village_32","orbit")))throw new AssertionError("ordinary stage descriptions all generic");
+        System.out.println("SMOOTHFIX_VERIFY_PASS native mouse model receives scripted slot coordinates; ordinary stress read-time input preserves sticky state and has distinct baseline/village workload feedback");
     }
     private static Object allocate(Class<?> type)throws Exception {
         Class<?> unsafe=Class.forName("sun.misc.Unsafe");Field instance=field(unsafe,"theUnsafe");

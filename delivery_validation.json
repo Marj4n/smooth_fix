@@ -1,0 +1,42 @@
+{
+  "javaCompilation": "NOT_RUN",
+  "minecraftRuntime": "NOT_RUN",
+  "powerShellRuntime": "NOT_RUN",
+  "profiles": {
+    "PC": {
+      "archiveIntegrity": "PASS",
+      "otherManifestEntriesUnchanged": 402,
+      "unchangedOriginalFilesCompared": 260,
+      "configurationMergeAndBackups": "PASS",
+      "bindingsResourcePacksOtherModsPreserved": "PASS",
+      "repeatApplication": "PASS",
+      "oldSmoothFixJarRejected": "PASS"
+    },
+    "Server": {
+      "archiveIntegrity": "PASS",
+      "otherManifestEntriesUnchanged": 402,
+      "unchangedOriginalFilesCompared": 275,
+      "configurationMergeAndBackups": "PASS",
+      "bindingsResourcePacksOtherModsPreserved": "PASS",
+      "repeatApplication": "PASS",
+      "oldSmoothFixJarRejected": "PASS"
+    },
+    "Mobile": {
+      "archiveIntegrity": "PASS",
+      "otherManifestEntriesUnchanged": 402,
+      "unchangedOriginalFilesCompared": 281,
+      "configurationMergeAndBackups": "PASS",
+      "bindingsResourcePacksOtherModsPreserved": "PASS",
+      "repeatApplication": "PASS",
+      "oldSmoothFixJarRejected": "PASS"
+    }
+  },
+  "sourceReview": {
+    "lexicalDelimiterCheck": "PASS",
+    "javaFilesReviewed": 108,
+    "mixinResourcesAndReferences": "PASS",
+    "completeJavaSourcesIncluded": "PASS",
+    "compiledModJarIncluded": false,
+    "existingGradleWrapperIncluded": true
+  }
+}

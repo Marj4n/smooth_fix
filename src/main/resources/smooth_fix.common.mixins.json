@@ -5,6 +5,7 @@
   "compatibilityLevel": "JAVA_17",
   "plugin": "org.marj4n.smooth_fix.mixin.SmoothFixMixinPlugin",
   "mixins": [
+    "MobEquipmentMarkerMixin",
     "BackgroundWorkerBudgetMixin",
     "BewitchmentSigilMarkerMixin",
     "TrinketGroupRegexMixin",

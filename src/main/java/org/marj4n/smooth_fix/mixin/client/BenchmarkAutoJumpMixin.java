@@ -9,7 +9,7 @@ import org.spongepowered.asm.mixin.injection.callback.*;
 public abstract class BenchmarkAutoJumpMixin {
     @Shadow private int ticksToNextAutojump;
     @Inject(method="isAutoJumpEnabled",at=@At("HEAD"),cancellable=true,require=1)
-    private void smoothfix$controlledAutoJump(CallbackInfoReturnable<Boolean> cir){if(AdvancedClient.controlsMovement())cir.setReturnValue(false);}
+    private void smoothfix$controlledAutoJump(CallbackInfoReturnable<Boolean> cir){if((AdvancedClient.controlsMovement() || org.marj4n.smooth_fix.benchmark.ClientBenchmark.controlsMovement()))cir.setReturnValue(false);}
     @Inject(method="tickMovement",at=@At("HEAD"),require=1)
-    private void smoothfix$clearPendingAutoJump(CallbackInfo ci){if(AdvancedClient.controlsMovement())ticksToNextAutojump=0;}
+    private void smoothfix$clearPendingAutoJump(CallbackInfo ci){if((AdvancedClient.controlsMovement() || org.marj4n.smooth_fix.benchmark.ClientBenchmark.controlsMovement()))ticksToNextAutojump=0;}
 }

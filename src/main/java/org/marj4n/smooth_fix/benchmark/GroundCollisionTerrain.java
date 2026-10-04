@@ -4,6 +4,7 @@ import net.minecraft.block.Blocks;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.*;
 import net.minecraft.world.World;
+import net.minecraft.registry.tag.FluidTags;
 import java.util.*;
 
 /** Collision-shape walkability, restricted to already loaded chunks on either side. */
@@ -26,10 +27,35 @@ public final class GroundCollisionTerrain implements GroundRoutePlanner.Terrain 
         return true;
     }
     public boolean clear(Box box) { return loaded(box) && world.isSpaceEmpty(body, box); }
+    public boolean water(double x,double y,double z) {
+        BlockPos pos=BlockPos.ofFloored(x,y,z);
+        return world.isChunkLoaded(pos) && world.getFluidState(pos).isIn(FluidTags.WATER);
+    }
+    /** Recheck the actual swept direction, including inertia and corners, without generating chunks. */
+    public boolean safeMotion(double x,double y,double z,double dx,double dz,double length) {
+        double norm=Math.hypot(dx,dz);if(norm<.001)return true;
+        for(double d=.15;d<=length+.15;d+=.15){
+            double px=x+dx/norm*d,pz=z+dz/norm*d;
+            // Probe the actual footprint, not the center of its block. Slab/edge offsets matter.
+            var foot=standingAt(px,y,pz,px,pz);
+            if(foot==null || foot.y()<y-1.25)return false;
+        }
+        return true;
+    }
     @Override public GroundRoutePlanner.Point step(GroundRoutePlanner.Point from, int dx, int dz) {
         double x = from.x() + dx + .5, z = from.z() + dz + .5;
+        return standingAt(x,from.y(),z,from.x()+.5,from.z()+.5);
+    }
+    private GroundRoutePlanner.Point standingAt(double x,double fromY,double z,double startX,double startZ) {
+        var from = new GroundRoutePlanner.Point(MathHelper.floor(startX),fromY,MathHelper.floor(startZ));
         Box support = new Box(x - halfWidth, from.y() - 2.01, z - halfWidth, x + halfWidth, from.y() + 1.26, z + halfWidth);
         if (!loaded(support)) return null;
+        // Water paths stay near the surface. Jump input supplies native buoyancy; lava is never allowed.
+        if(water(x,from.y()+.1,z) || water(x,from.y()-.3,z)) {
+            for(double wy=from.y()+1;wy>=from.y()-1;wy-=.5)
+                if(water(x,wy+.1,z) && !water(x,wy+1.1,z) && clear(bodyAt(x,wy,z)))
+                    return new GroundRoutePlanner.Point(MathHelper.floor(x),Math.floor(wy*2)/2,MathHelper.floor(z));
+        }
         List<Double> floors = new ArrayList<>();
         for (var shape : world.getBlockCollisions(body, support)) if (!shape.isEmpty()) {
             double y = shape.getMax(Direction.Axis.Y);
@@ -44,8 +70,8 @@ public final class GroundCollisionTerrain implements GroundRoutePlanner.Terrain 
                     || state.isOf(Blocks.CACTUS) || world.getBlockState(feet).isOf(Blocks.SWEET_BERRY_BUSH)) continue;
             // Sweeping at the higher floor rejects walls, low ceilings and corner clipping.
             double sweepY = Math.max(y, from.y());
-            Box sweep = bodyAt(from.x() + .5, sweepY, from.z() + .5).union(bodyAt(x, sweepY, z));
-            if (clear(bodyAt(x, y, z)) && clear(sweep)) return new GroundRoutePlanner.Point(from.x() + dx, y, from.z() + dz);
+            Box sweep = bodyAt(startX, sweepY, startZ).union(bodyAt(x, sweepY, z));
+            if (clear(bodyAt(x, y, z)) && clear(sweep)) return new GroundRoutePlanner.Point(MathHelper.floor(x), y, MathHelper.floor(z));
         }
         return null;
     }

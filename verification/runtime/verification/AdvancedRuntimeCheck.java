@@ -83,6 +83,7 @@ public final class AdvancedRuntimeCheck implements ModInitializer {
             }
             if(!Boolean.TRUE.equals(report.get("environmentRestored")) || !Boolean.TRUE.equals(report.get("playerRestored")))throw new AssertionError("recovery failed");if(!"completed".equals(report.get("status")))throw new AssertionError("incorrect aggregate after client reports: "+report.get("status"));if(!Boolean.TRUE.equals(((Map<?,?>)report.get("recoveryVerification")).get("all")))throw new AssertionError("server recovery verification missing");assertRestored(server);
             pass("eight actual-world stages complete; native chest + Lootr loot, inventory swap, accepted combat damage, TNT explosion and world save observed");
+            player=ContinuationCheck.run(server,player);assertRestored(server);
             verifyStructureEdges(server);
             plan("end");startCommand(server);r=run();connection.assertControlBeforeRespawn();accept(r,-1,0,"old phase abort");if(run()!=r)throw new AssertionError("stale response aborted End");accept(r,-1,4,"explicit stop across transition");if(run()!=null)throw new AssertionError("explicit stop ignored");assertRestored(server);pass("End transition control precedes respawn; stale abort rejected and intentional stale-phase stop restores inventory");
             plan("inventory");startCommand(server);r=run();field(r.getClass(),"preparedAt").setLong(r,System.nanoTime()-121_000_000_000L);step=3;return;
@@ -103,7 +104,7 @@ public final class AdvancedRuntimeCheck implements ModInitializer {
         if(!ids.contains("smoothfix_fixture:replacement") || ids.contains("smoothfix_fixture:outpost"))throw new AssertionError("replacement village target resolver: "+ids);
         if(!VillageStructureTargets.villagePath("small/village_swamp") || !VillageStructureTargets.villagePath("oasis_village") || VillageStructureTargets.villagePath("pillager_outpost"))throw new AssertionError("village identifier classification");
         pass("village structure-set replacement without vanilla village tag is resolved; unrelated outpost excluded; CTOV-style and Integrated-style village IDs recognized");
-        GroundNavigationCheck.run(player);
+        ContainerCheck.run(player);GroundNavigationCheck.run(player);
         verifyNativeSearchBands(server);
         structurePlan("#minecraft:village",true);startCommand(server);Object r=run();Object search=field(r.getClass(),"structureSearch").get(r);if(search==null)throw new AssertionError("village search not incremental");
         Method skip=r.getClass().getDeclaredMethod("skip",String.class);skip.setAccessible(true);skip.invoke(r,"skipped_structure_not_found_in_radius");
