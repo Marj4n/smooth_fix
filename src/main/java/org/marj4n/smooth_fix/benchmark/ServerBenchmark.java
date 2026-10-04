@@ -95,7 +95,7 @@ public final class ServerBenchmark {
             else SmoothFix.LOGGER.debug("Ignored benchmark abort from old phase {} (current {})",phase,r.phase);
             return;
         }
-        if(action==1 && r==active && phase==r.phase && r.readyAt==0){r.readyAt=System.nanoTime();r.heartbeat=r.readyAt;}
+        if(action==1 && r==active && phase==r.phase && r.readyAt==0){r.readyAt=System.nanoTime();if(r.continuing){if(r.measuring)r.measurementAt=r.readyAt-r.continuationElapsed;else r.readyAt-=r.continuationElapsed;r.continuing=false;}r.heartbeat=System.nanoTime();}
         if(action==2 && phase>=0 && phase<r.results.size()) {
             try{JsonElement json=JsonParser.parseString(data);if(json.isJsonObject()){r.results.get(phase).put("clientSummary",json);r.checkpoint();}}
             catch(Exception e){SmoothFix.LOGGER.warn("Rejected malformed benchmark summary",e);}
@@ -131,6 +131,7 @@ public final class ServerBenchmark {
         final long started=System.nanoTime(),soakNanos;
         int phase=-1,cycle,localTick;
         long stageStarted,readyAt,heartbeat,measurementAt,lastTeleport,pressureAt;
+        boolean continuing;long continuationElapsed;net.minecraft.nbt.NbtList continuationInventory;int continuationSelected;
         boolean measuring,ending;
         ServerWorld world;
         Stage stage;
@@ -153,7 +154,8 @@ public final class ServerBenchmark {
             ServerPlayerEntity p=player();if(p==null)return;
             PacketByteBuf buf=PacketByteBufs.create();buf.writeByte(action);buf.writeUuid(id);buf.writeInt(phase);
             buf.writeString(stage==null?"finished":stage.name);buf.writeString(stage==null?"stop":stage.mode);
-            buf.writeString(world==null?ARENA.getValue().toString():world.getRegistryKey().getValue().toString());buf.writeDouble(centerX);buf.writeDouble(centerY);buf.writeDouble(centerZ);
+            buf.writeString(world==null?ARENA.getValue().toString():world.getRegistryKey().getValue().toString());buf.writeDouble(centerX);buf.writeDouble(centerY);buf.writeDouble(centerZ);buf.writeInt(stages.size());buf.writeInt(cycle);buf.writeBoolean(soakNanos>0);
+            buf.writeString(phase+1<stages.size() || soakNanos>0?stages.get((phase+1)%stages.size()).name:"Finish and restore player");buf.writeDouble(continuationElapsed/1e9);
             ServerPlayNetworking.send(p,BenchmarkProtocol.CONTROL,buf);
         }
         void next() {
@@ -168,7 +170,7 @@ public final class ServerBenchmark {
             world=server.getWorld(stage.mode.equals("explore")?TERRAIN:stage.mode.equals("bloodmoon")?LUNAR:ARENA);
             centerX=0.5;centerZ=0.5;centerY=stage.mode.equals("explore")?180:70;
             ServerPlayerEntity p=player();if(p==null){finish("owner_missing");return;}
-            stageStarted=System.nanoTime();readyAt=measurementAt=0;heartbeat=stageStarted;measuring=false;localTick=0;lastTeleport=stageStarted;
+            stageStarted=System.nanoTime();readyAt=measurementAt=0;heartbeat=stageStarted;measuring=false;localTick=0;continuing=false;continuationElapsed=0;continuationInventory=null;lastTeleport=stageStarted;
             // This control packet must precede vanilla respawn/teleport packets on the same connection.
             // It ends the client's previous recording and resets its readiness gate before world changes.
             send(1);
@@ -181,7 +183,8 @@ public final class ServerBenchmark {
                 try {BloodMoonAdapter.enable(world);result.put("lunarEvent","enhancedcelestials2defaultlunarevents:blood_moon");}
                 catch(Exception e){result.put("status","skipped_adapter_unavailable");result.put("reason",e.toString());checkpoint();next();return;}
             }
-            checkpoint();p.sendMessage(Text.literal("Smooth Fix: "+stage.name+" — automatic warm-up, then 60s recording."),false);
+            continuationInventory=p.getInventory().writeNbt(new net.minecraft.nbt.NbtList());continuationSelected=p.getInventory().selectedSlot;
+            checkpoint();p.sendMessage(Text.literal("[Smooth Fix Stress "+(phase%stages.size()+1)+"/"+stages.size()+"] "+stage.name+" — "+AdvancedStageInfo.legacyTask(stage.name,stage.mode)+". Warm-up: 10 seconds; measurement: 60 seconds. Next: "+(phase+1<stages.size() || soakNanos>0?stages.get((phase+1)%stages.size()).name:"Finish and restore player")),false);
         }
         void spawn(EntityType<?> type,int count) {
             for(int i=0;i<count;i++){
@@ -197,6 +200,13 @@ public final class ServerBenchmark {
         void tick() {
             if(ending)return;ServerPlayerEntity p=player();long now=System.nanoTime();
             if(p==null){finish("owner_missing");return;}
+            if(!p.isAlive()){
+                continuationElapsed=readyAt==0?0:now-(measuring?measurementAt:readyAt);send(7);BenchmarkAbilities.revoke(p);p=BenchmarkRespawn.replace(p);
+                if(continuationInventory!=null){p.getInventory().clear();p.getInventory().readNbt(continuationInventory);p.getInventory().selectedSlot=continuationSelected;}
+                p.teleport(world,centerX,centerY,centerZ,0,15);p.setHealth(p.getMaxHealth());p.setVelocity(net.minecraft.util.math.Vec3d.ZERO);p.fallDistance=0;BenchmarkAbilities.grant(p);p.playerScreenHandler.syncState();
+                var result=results.get(phase);result.put("playerDeathsRecovered",((Number)result.getOrDefault("playerDeathsRecovered",0)).intValue()+1);readyAt=0;stageStarted=heartbeat=now;continuing=true;send(8);checkpoint();p.sendMessage(Text.literal("[Smooth Fix Stress] Player died: automatically respawning and resuming this stage. The event remains recorded."),false);return;
+            }
+            if(localTick%20==0){continuationInventory=p.getInventory().writeNbt(new net.minecraft.nbt.NbtList());continuationSelected=p.getInventory().selectedSlot;}
             if(!p.getWorld().getRegistryKey().equals(world.getRegistryKey())){finish("player_left_test_dimension");return;}
             if(world.getPlayers().size()>1){finish("another_player_entered_test_dimension");return;}
             var heap=java.lang.management.ManagementFactory.getMemoryMXBean().getHeapMemoryUsage();
@@ -230,7 +240,7 @@ public final class ServerBenchmark {
         }
         void completeStage(String status) {
             if(phase<0 || phase>=results.size())return;
-            Map<String,Object> result=results.get(phase);result.put("status",status);result.put("stageElapsedSeconds",(System.nanoTime()-stageStarted)/1e9);
+            Map<String,Object> result=results.get(phase);result.put("status",result.containsKey("playerDeathsRecovered") && (status.equals("complete") || status.equals("soak_duration_reached"))?"failed_recovered_player_death":status);result.put("stageElapsedSeconds",(System.nanoTime()-stageStarted)/1e9);
             if(measuring){result.put("server",ServerDiagnostics.finishRecording());measuring=false;}
             result.put("loadedEntitiesAtEnd",entityCount(world));result.put("worldAtEnd",worldSnapshot());checkpoint();
         }

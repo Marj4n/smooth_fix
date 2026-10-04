@@ -39,7 +39,9 @@ public final class MemoryReport {
         report.put("performanceOptions", Map.of("backgroundWorkerLimit",config.backgroundWorkerLimit,
                 "modelRotationAllocationFix",config.modelRotationAllocationFix,
                 "confirmedTeleportAnchorFix",config.confirmedTeleportAnchorFix,
-                "trinketsSnapshotAllocationFix",config.trinketsSnapshotAllocationFix));
+                "trinketsSnapshotAllocationFix",config.trinketsSnapshotAllocationFix,
+                "accessoriesEmptyBufferFlushFix",config.accessoriesEmptyBufferFlushFix,
+                "emiSearchSafetyFix",config.emiSearchSafetyFix));
         report.put("heapBytes", usage(ManagementFactory.getMemoryMXBean().getHeapMemoryUsage()));
         report.put("nonHeapBytes", usage(ManagementFactory.getMemoryMXBean().getNonHeapMemoryUsage()));
         List<Map<String, Object>> pools = new ArrayList<>();

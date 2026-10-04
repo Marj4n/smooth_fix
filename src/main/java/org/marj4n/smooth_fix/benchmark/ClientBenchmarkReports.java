@@ -16,6 +16,7 @@ public final class ClientBenchmarkReports {
     private static Map<String,Object> expected;
     private static UUID recovering;
     private static long recoveryDeadline;
+    private static long nextRecoveryCheck;
     private static boolean installed;
     private ClientBenchmarkReports() { }
     public static void install(){
@@ -27,7 +28,7 @@ public final class ClientBenchmarkReports {
                     if(report==null||!report.belongsTo(id))return;
                     report.serverResult(new Gson().fromJson(packet,Map.class));
                     if(!packet.has("expectedRecovery"))return;
-                    expected=new Gson().fromJson(packet.get("expectedRecovery"),Map.class);recovering=id;recoveryDeadline=System.nanoTime()+10_000_000_000L;
+                    expected=new Gson().fromJson(packet.get("expectedRecovery"),Map.class);recovering=id;recoveryDeadline=System.nanoTime()+10_000_000_000L;nextRecoveryCheck=0;
                     report.recovery(Map.of("all",false,"status","pending"));
                 }catch(Exception e){SmoothFix.LOGGER.error("Final benchmark result could not be stored",e);}
             });
@@ -52,14 +53,18 @@ public final class ClientBenchmarkReports {
     public static void end(String reason){if(report!=null&&!report.isFinished())try{report.finish(reason);}catch(IOException e){SmoothFix.LOGGER.error("Benchmark run checkpoint failed",e);}}
     private static void verifyRecovery(MinecraftClient client){
         if(expected==null||recovering==null)return;
+        long now=System.nanoTime();if(now<nextRecoveryCheck)return;nextRecoveryCheck=now+100_000_000L;
         Map<String,Object> result;
+        Map<String,Object> actual=Map.of();
         if(client.player==null||client.world==null||client.interactionManager==null)result=new LinkedHashMap<>(Map.of("all",false,"status","player_not_ready"));
         else{
-            result=RecoverySnapshot.compare(expected,RecoverySnapshot.capture(client.player,client.interactionManager.getCurrentGameMode().getId()));
+            actual=RecoverySnapshot.capture(client.player,client.interactionManager.getCurrentGameMode().getId());
+            result=RecoverySnapshot.compare(expected,actual);
             result.put("handledScreenClosed",client.currentScreen==null);if(client.currentScreen!=null)result.put("all",false);
         }
         if(!Boolean.TRUE.equals(result.get("all"))&&System.nanoTime()<recoveryDeadline)return;
         result.put("status",Boolean.TRUE.equals(result.get("all"))?"verified":"failed_or_timed_out");
+        if(!Boolean.TRUE.equals(result.get("all"))){result.put("expectedSnapshot",expected);result.put("observedSnapshot",actual);}
         try{
             if(report!=null&&report.belongsTo(recovering))report.recovery(result);
             if(ClientPlayNetworking.canSend(BenchmarkProtocol.RUN_ACK)){var b=PacketByteBufs.create();b.writeUuid(recovering);b.writeString(new Gson().toJson(result),24000);ClientPlayNetworking.send(BenchmarkProtocol.RUN_ACK,b);}

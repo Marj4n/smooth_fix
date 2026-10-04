@@ -1,6 +1,16 @@
 # Changelog
 
+
+- Advanced7 (source only; unbuilt): guard redundant BMC non-offhand equipment checks, suppress optional EC shader suggestions, improve Nether/End exploration, and add 30/120 FPS diagnostic budgets.
+- Pack batch: remove only the EC shader addon, retain render distance 12, add reduced visual profiles and merging local installers. No measured FPS gain is claimed.
 ## 1.0.5
+- Advanced6 (source only; unbuilt): translate all controller messages and documentation to English.
+- Guard Accessories beta.48's initial buffer flush when live equipment and cosmetic slots are empty; retain equipped render/effect behavior and fallback on incompatible APIs.
+- Serialize EMI tag-cache construction/reload and guard null search tooltips, addressing the supplied tag and regex query exceptions.
+- Cache ordered benchmark HUD text and avoid full continuation NBT serialization on unchanged inventories.
+- Observe the common native tooltip component renderer; use actual footprint ledge probes and avoid repeatedly unsafe waypoints.
+- Hand the respawn connection to the replacement player; clear pending operations when resuming and retain recovery mismatch snapshots.
+- No build, runtime tests or measured FPS gain for Advanced6; see VALIDATION.json.
 - Advanced4: replace flight altitude key spam with bounded ground pathfinding, collision-shape detours, short step jumps and stall replanning.
 - Override benchmark movement at key reads; preserve physical/toggle key state and keep preparation/UI input neutral.
 - Show stage purpose, search progress, remaining action time and next stage in a cached HUD; announce stage/results/recovery in chat.

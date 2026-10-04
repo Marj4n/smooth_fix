@@ -42,6 +42,13 @@ public final class SmoothFixConfig {
     public boolean saintsDragonEntityScanFix = true;
     public boolean trinketsRegexAllocationFix = true;
     public boolean trinketsSnapshotAllocationFix = true;
+    public boolean accessoriesEmptyBufferFlushFix = true;
+    public boolean emiSearchSafetyFix = true;
+    public boolean betterMobCombatEquipmentSlotFix = true;
+    /** Suppress Core's optional shader-addon suggestion; does not unload installed mods. */
+    public boolean enhancedCelestialsShaderPromptSuppression = true;
+    /** Recording budget only; does not change the FPS cap or game settings. */
+    public int diagnosticTargetFps = 120;
     public boolean confirmedTeleportAnchorFix = true;
     /** Zero leaves upstream worker sizing untouched. Does not resize C2ME or Sodium pools. */
     public int backgroundWorkerLimit = 2;

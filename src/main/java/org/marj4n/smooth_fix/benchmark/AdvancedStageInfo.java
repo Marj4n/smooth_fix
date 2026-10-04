@@ -4,29 +4,33 @@ package org.marj4n.smooth_fix.benchmark;
 public final class AdvancedStageInfo {
     public static String task(String mode) {
         return switch (mode) {
-            case "panorama" -> "Mengamati render terrain, entity dan partikel";
-            case "route" -> "Berjalan di terrain yang sudah tersedia";
-            case "cold_route" -> "Berjalan ke terrain baru; ukur chunk generation";
-            case "structure" -> "Cari struktur, lalu berjalan mengamati area sekitar";
-            case "chest" -> "Membuka chest dan memindahkan loot";
-            case "lootr" -> "Membuka Lootr personal chest dan mengambil loot";
-            case "inventory" -> "Membuka inventory, tooltip, swap slot dan hotbar";
-            case "emi_search" -> "Menunggu EMI ready, mencari item dan memeriksa hasil";
-            case "emi_recipe" -> "Membuka resep EMI dan memeriksa output";
-            case "combat" -> "Mendekati mob benchmark dan menyerang berulang";
-            case "effects" -> "Mengamati mob dengan efek aktif";
-            case "bloodmoon" -> "Mengamati Blood Moon native dan kerumunan mob";
-            case "wither" -> "Mengamati Wither native dan pertarungan";
-            case "tnt" -> "Mengamati ledakan TNT dan perubahan terrain";
-            case "break" -> "Berjalan dan memecahkan blok terrain";
-            case "weather" -> "Mengamati hujan, petir dan partikel";
-            case "teleport" -> "Teleport berulang; ukur loading terrain";
-            case "nether" -> "Berjalan di terrain Nether yang aman";
-            case "end" -> "Berjalan di terrain End yang aman";
-            case "save" -> "Menyimpan world asli salinan dan mengukur waktunya";
-            default -> "Menyiapkan workload";
+            case "panorama" -> "Observing terrain, entity and particle rendering";
+            case "route" -> "Walking through loaded terrain";
+            case "cold_route" -> "Walking into new terrain; measuring chunk generation";
+            case "structure" -> "Finding a structure, then walking around the surrounding area";
+            case "chest" -> "Opening chests and transferring loot";
+            case "lootr" -> "Opening personal Lootr chests and transferring loot";
+            case "inventory" -> "Opening inventory, rendering tooltips, swapping slots and hotbar";
+            case "emi_search" -> "Waiting for EMI, searching items and checking results";
+            case "emi_recipe" -> "Opening EMI recipes and checking outputs";
+            case "combat" -> "Approaching benchmark mobs and attacking repeatedly";
+            case "effects" -> "Observing mobs with active status effects";
+            case "bloodmoon" -> "Observing the native Blood Moon and mob crowds";
+            case "wither" -> "Observing native Withers and combat";
+            case "tnt" -> "Observing TNT explosions and terrain changes";
+            case "break" -> "Walking and breaking terrain blocks";
+            case "weather" -> "Observing rain, lightning and particles";
+            case "explore" -> "Exploring arena terrain and measuring chunk loading";
+            case "baseline" -> "Observing arena rendering and ticks without extra mobs";
+            case "village" -> "Observing villagers and native AI activity in the arena";
+            case "teleport", "teleports" -> "Teleporting repeatedly; measuring terrain loading";
+            case "nether" -> "Walking through safe Nether terrain";
+            case "end" -> "Walking through safe End terrain";
+            case "save" -> "Saving the actual world copy and measuring save time";
+            default -> "Preparing the workload";
         };
     }
+    public static String legacyTask(String name,String mode){return task(name.equals("baseline")?"baseline":name.startsWith("village")?"village":name.startsWith("wither")?"wither":mode);}
     public static boolean walking(String mode) {
         return switch (mode) {
             case "route", "cold_route", "structure", "combat", "effects", "bloodmoon", "wither", "break", "weather", "nether", "end" -> true;

@@ -31,6 +31,7 @@ time and next stage. Automatic mod structures run after core coverage, before
 save, and have a separate default 90-second search budget. Mandatory village and
 manually configured searches retain the expanding 10,000/20,000/30,000/... behavior.
 
-Native/headless verification is described in VALIDATION.json and VALIDATION_OUTPUT.txt.
+Historical native/headless verification belonged to Advanced4. Current validation
+status is in VALIDATION.json; it does not rerun or certify that historical fixture.
 The complete graphical modpack, PAL integration, mod movement effects, doors,
 swimming and ladders still need direct gameplay verification.

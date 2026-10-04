@@ -1,12 +1,14 @@
-Smooth Fix 1.0.5 / build 1.0.5-perf-r2-advanced4
+Smooth Fix 1.0.5 / source revision 1.0.5-perf-r2-advanced7
+Public version remains 1.0.5-1.20.1.
 
-Main JAR built with Gradle 9.6.1 / official Loom 1.17.21 / JDK 21.
-Output remains Java 17 bytecode. Public version remains 1.0.5-1.20.1.
-Build on PC: .\gradlew clean build
-Main mod: build/libs/smooth_fix-1.0.5-1.20.1.jar
+SOURCE ONLY: no Gradle build, dependency download, Java compile or Minecraft test.
+Archive/config/installer validation is not a successful Java build.
+No new main mod JAR is included. Compile once locally, then install on both peers.
 
-Use the same main JAR on client and server. Verification-only JARs are isolated
-internal test tools and are excluded from the delivered mod.
-See VALIDATION.json and VALIDATION_OUTPUT.txt for current evidence and limits.
-The build host uses a local Loom socket-probe workaround; distributed Gradle
-configuration retains the official plugin and contains no host workaround.
+Use JDK 21 to run Gradle 9.6.1 / Loom 1.17.21: .\gradlew clean build
+Output target: Java 17 bytecode.
+Main output: build/libs/smooth_fix-1.0.5-1.20.1.jar
+Do not install verification-only JARs.
+
+PC 120 FPS and Android 30 FPS at render distance 12 remain unverified targets.
+See REVIEW_ADVANCED7_20261004.md and VALIDATION.json.
