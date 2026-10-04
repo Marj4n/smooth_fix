@@ -1,0 +1,18 @@
+{
+  "type": "smooth_fix:benchmark_night",
+  "generator": {
+    "type": "minecraft:flat",
+    "settings": {
+      "biome": "minecraft:plains",
+      "lakes": false,
+      "features": false,
+      "layers": [
+        {
+          "height": 129,
+          "block": "minecraft:bedrock"
+        }
+      ],
+      "structure_overrides": []
+    }
+  }
+}

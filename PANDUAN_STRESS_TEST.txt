@@ -1,0 +1,188 @@
+SMOOTH FIX 1.0.5 — ADVANCED REAL-WORLD STRESS TEST
+Build ID: 1.0.5-perf-r2-advanced1
+Minecraft 1.20.1 / Fabric
+
+PENTING SEBELUM TES
+- Pasang JAR Smooth Fix build yang sama di CLIENT dan SERVER. Jangan menumpuk dua JAR.
+- `smooth_fix.json` harus mengaktifkan diagnostics.
+- OP / cheats diperlukan.
+- Advanced suite berjalan di world/dimension asli pemain, BUKAN flat benchmark dimension.
+- Sangat disarankan pakai SALINAN WORLD. Vanilla chest/TNT test block dibuat sementara dan dibersihkan,
+  tetapi Lootr diuji lewat interaksi Lootr asli sehingga state loot per-player dapat berubah seperti gameplay normal.
+- Jangan pindah item/dimension secara manual selama suite. Script akan mengendalikan movement/UI saat dibutuhkan.
+
+COMMAND UTAMA
+/smoothfix stress advanced
+
+Status:
+/smoothfix stress status
+
+Stop + restore player:
+/smoothfix stress stop
+/smoothfixc stopstress
+
+Legacy synthetic suite masih tersedia:
+/smoothfix stress start
+/smoothfix stress wither 10
+/smoothfix stress soak 30
+/smoothfix stress feature <entity_id> <count>
+
+ADVANCED SUITE — URUTAN STAGE
+1. real_terrain_loaded
+   - Rute movement pada terrain/world asli yang sudah aktif.
+   - Mengukur client frame time + server tick profile dan structure starts yang teramati.
+
+2. cold_chunk_generation
+   - Memilih area jauh secara deterministik.
+   - Server MEMUAT CHUNK DULU, baru membaca Heightmap/top Y.
+   - `chunkPrepareMs` mencatat waktu synchronous chunk preparation/generation.
+   - Player baru dipindah setelah chunk/terrain siap; ini mencegah bug player/TNT masuk terlalu rendah.
+
+3. structure_scan
+   - Men-scan structure starts dari chunk world asli sepanjang rute.
+   - Jika tidak ada struktur teramati, status `complete_no_structure_observed`, bukan PASS palsu.
+
+4. vanilla_chest_loot
+   - Membuat chest sementara HANYA pada blok udara dan memasukkan marker item.
+   - Client benar-benar membuka screen lalu QUICK_MOVE item.
+   - PASS hanya jika server melihat NBT inventory pemain benar-benar berubah.
+   - Chest sementara dihapus setelah stage.
+
+5. lootr_chest_loot
+   - Jika Lootr tidak terpasang: `skipped_mod_unavailable`.
+   - Mencari Lootr block entity yang benar-benar ada di loaded chunks sekitar pemain.
+   - Jika tidak ada: `skipped_no_loaded_lootr_container`; suite tetap lanjut.
+   - Jika ada: client membuka Lootr dan QUICK_MOVE; PASS hanya jika inventory server berubah.
+
+6. inventory_hotbar
+   - Membuka InventoryScreen asli.
+   - Melakukan SWAP item inventory ke hotbar, lalu mengganti selected hotbar slot.
+   - Client mengirim `UpdateSelectedSlotC2SPacket` dan server memverifikasi BOTH:
+     inventory berubah + selected slot server berubah.
+
+7. emi_search_recipe
+   - Bukan sekadar cek `emi` loaded.
+   - Memastikan EMI index + recipe manager siap.
+   - Menjalankan search `crafting` dan menunggu `EmiSearch.searchThread == null`.
+   - Search harus menghasilkan hasil non-empty.
+   - Mencari `minecraft:crafting_table` dari index, membuka `displayRecipes`, lalu memastikan
+     screen nyata adalah `dev.emi.emi.screen.RecipeScreen`.
+   - Report menyimpan indexSize, searchResults, query, target dan recipeScreen.
+
+8. combat_hit
+   - Spawn target zombie benchmark di world asli dekat pemain.
+   - Client benar-benar melakukan attack packet biasa.
+   - Counter dinaikkan HANYA setelah `LivingEntity.damage(...)` return true,
+     attacker adalah owner benchmark, dan victim punya tag stage benchmark.
+   - Report: `acceptedPlayerHits` + `acceptedPlayerDamage`.
+
+9. tnt_destruction
+   - Membuat platform GLASS sementara hanya pada blok udara dan menyalakan primed TNT asli.
+   - PASS hanya jika minimal satu benchmark glass block benar-benar berubah/hancur.
+   - Glass sengaja dipakai agar tidak meninggalkan block drop normal; test blocks dibersihkan setelah stage.
+
+READINESS / TRANSITION RULES
+- Server menyelesaikan preparation stage terlebih dahulu baru mengirim START ke client.
+- Client belum mengirim READY sampai:
+  * dimension yang diterima sudah benar,
+  * player sudah sampai dekat target stage,
+  * target chunk sudah loaded di client,
+  * window sedang focused.
+- Setiap stage punya heartbeat dan timeout sendiri.
+- Stage END menunggu client frame report sebelum pindah ke stage berikutnya.
+- Transition order diverifikasi oleh fixture:
+  terrain -> cold chunk -> structure -> vanilla chest -> Lootr -> inventory -> EMI -> combat -> TNT -> selesai.
+
+RECOVERY — WAJIB 100%
+Sebelum advanced suite mengubah apa pun, server menulis journal crash-safe ke:
+<world>/smooth_fix/benchmark_recovery/<player-uuid>.json
+
+Yang disimpan dan dikembalikan:
+- seluruh PlayerInventory NBT: main inventory, hotbar, armor, offhand;
+- selected hotbar slot;
+- dimension;
+- x/y/z;
+- yaw/pitch;
+- game mode;
+- flying / allowFlying / invulnerable;
+- flySpeed / walkSpeed.
+
+Saat restore:
+1. temporary PlayerAbilityLib grants Smooth Fix dicabut;
+2. handled screen aktif ditutup;
+3. gamemode + location/dimension dipulihkan;
+4. seluruh inventory NBT dipulihkan;
+5. selected hotbar slot dipulihkan;
+6. ability flags/speeds dipulihkan + `sendAbilitiesUpdate()`;
+7. player/current screen handler disync;
+8. `UpdateSelectedSlotS2CPacket` dikirim agar hotbar client ikut kembali;
+9. journal baru dihapus SETELAH semua langkah berhasil.
+
+Recovery dipanggil pada normal completion, `/smoothfix stress stop`, client stop,
+timeout/failure, disconnect, server stopping, dan login berikutnya jika journal lama masih ada.
+
+FINAL RECOVERY VERIFICATION
+Advanced report tidak hanya menulis `playerRestored=true`. Setelah restore, snapshot dibandingkan lagi dan menghasilkan:
+`recoveryVerification.inventory`
+`recoveryVerification.selectedHotbarSlot`
+`recoveryVerification.dimension`
+`recoveryVerification.location`
+`recoveryVerification.rotation`
+`recoveryVerification.gameMode`
+`recoveryVerification.abilities`
+`recoveryVerification.all`
+
+Target valid: SEMUANYA true, terutama `recoveryVerification.all=true`.
+
+PLAYERABILITYLIB
+Jika PlayerAbilityLib tersedia, Smooth Fix memakai source sementara `smooth_fix:advanced_benchmark`
+untuk ALLOW_FLYING + FLYING + INVULNERABLE. Tidak ada hard dependency.
+Source itu dicabut sebelum vanilla ability snapshot dipulihkan.
+
+LOKASI HASIL
+SERVER:
+<world>/smooth_fix/benchmarks/advanced_<runId>.json
+
+CLIENT per stage:
+config/smooth_fix/reports/benchmark_client_advanced_*.json
+
+SERVER REPORT YANG PENTING
+- status setiap stage
+- actionVerified
+- readyLatencyMs
+- elapsedSeconds
+- server tick/profile summary
+- client frame summary
+- chunkPrepareMs untuk cold chunk
+- structuresObserved
+- EMI clientVerification
+- acceptedPlayerHits / acceptedPlayerDamage
+- recoveryVerification.*
+
+CARA MEMBACA
+120 FPS ~= 8.33 ms/frame.
+20 TPS = 50 ms/tick.
+`frameIntervals`: interval antar frame termasuk FPS cap/vsync/wait.
+`frameWorkBeforePresent`: kerja CPU render sebelum present, bukan GPU timing.
+`profileTickTimings`: durasi callback tick yang diukur Smooth Fix.
+`tickStartIntervals`: cadence antar tick termasuk wait/scheduler/JVM delay.
+
+Jangan menyatakan optimasi berhasil dari average saja. Periksa p95/p99/max,
+slow-frame stacks, delayed-tick stacks, GC deltas, stage yang actionVerified=false,
+dan apakah recoveryVerification.all=true.
+
+CATATAN LOOTR / STRUCTURE
+Advanced suite hanya boleh menyebut Lootr PASS jika container Lootr nyata ditemukan dan inventory berubah.
+Kalau tidak ada Lootr di loaded area, status SKIP adalah hasil yang benar, bukan kegagalan harness.
+Structure stage juga tidak mengarang coverage: tidak ada structure observed => ditulis apa adanya.
+
+BUILD / VERIFIKASI SOURCE
+JDK 21 untuk menjalankan Gradle 9.6.1 + Loom 1.17.21; output mod tetap Java 17.
+Windows:
+  .\gradlew clean build
+
+Fixture transition murni Java:
+  javac -d verification/stageplan_classes src/main/java/org/marj4n/smooth_fix/benchmark/AdvancedStagePlan.java verification/AdvancedStagePlanCheck.java
+  java -cp verification/stageplan_classes AdvancedStagePlanCheck
+
+Environment build harus mempunyai akses ke Gradle/Fabric/Minecraft dependencies atau cache Gradle lokal.

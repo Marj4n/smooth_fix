@@ -1,9 +1,14 @@
 package org.marj4n.smooth_fix.mixin;
 
 import net.fabricmc.loader.api.FabricLoader;
+import net.fabricmc.api.EnvType;
 import org.marj4n.smooth_fix.SmoothFix;
 import org.marj4n.smooth_fix.config.SmoothFixConfig;
 import org.objectweb.asm.tree.ClassNode;
+import org.marj4n.smooth_fix.performance.ModelRotationBytecode;
+import org.marj4n.smooth_fix.performance.WorkerPoolBytecode;
+import org.marj4n.smooth_fix.performance.BewitchmentSearchBytecode;
+import org.marj4n.smooth_fix.performance.DragonScanBytecode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 
@@ -33,6 +38,21 @@ public final class SmoothFixMixinPlugin implements IMixinConfigPlugin {
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
         SmoothFixConfig config = SmoothFixConfig.get();
+
+        if (mixinClassName.endsWith("BewitchmentSigilMarkerMixin")) return config.bewitchmentSigilSearchFix && loaded("bewitchment");
+        if (mixinClassName.endsWith("TrinketGroupRegexMixin")) return config.trinketsRegexAllocationFix && loaded("tclayer");
+        if (mixinClassName.endsWith("TrinketSnapshotMarkerMixin")) return config.trinketsSnapshotAllocationFix && loaded("tclayer");
+        if (mixinClassName.endsWith("DragonScanMarkerMixin")) return config.saintsDragonEntityScanFix && loaded("saintsdragons");
+        if (mixinClassName.endsWith("ModelPartAllocationMixin")) return config.modelRotationAllocationFix;
+        if (mixinClassName.endsWith("ClientFrameTimingMixin")) return config.diagnostics;
+        if (mixinClassName.endsWith("BackgroundWorkerBudgetMixin")) return config.backgroundWorkerLimit > 0;
+        if (mixinClassName.endsWith("ConfirmedTeleportAnchorMixin")) {
+            return config.confirmedTeleportAnchorFix && loader.getEnvironmentType() == EnvType.SERVER;
+        }
+
+        if (mixinClassName.endsWith("EntityRotationGuardMixin")) {
+            return config.invalidEntityRotationGuard && loader.getEnvironmentType() == EnvType.SERVER;
+        }
 
         if (mixinClassName.endsWith("EmiCompatPluginMixin")) {
             boolean apply = config.emiCompatSpellEngine
@@ -96,5 +116,30 @@ public final class SmoothFixMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
+        if (mixinClassName.endsWith("TrinketSnapshotMarkerMixin")) {
+            SmoothFix.LOGGER.info("Trinkets eager inventory snapshot: {} verified expression(s) optimized",
+                    org.marj4n.smooth_fix.performance.TrinketSnapshotBytecode.apply(targetClass));
+        }
+        if (mixinClassName.endsWith("BewitchmentSigilMarkerMixin")) {
+            int changed = BewitchmentSearchBytecode.apply(targetClass);
+            SmoothFix.LOGGER.info("Bewitchment sigil search: {} verified expression(s) optimized", changed);
+        }
+        if (mixinClassName.endsWith("DragonScanMarkerMixin")) {
+            String owner=loader.getMappingResolver().mapClassName("intermediary","net.minecraft.class_638").replace('.','/');
+            String name=loader.getMappingResolver().mapMethodName("intermediary","net.minecraft.class_638","method_18112","()Ljava/lang/Iterable;");
+            SmoothFix.LOGGER.info("Saints Dragons loaded-entity index: {} verified expression(s) optimized",DragonScanBytecode.apply(targetClass,owner,name));
+        }
+        if (mixinClassName.endsWith("BackgroundWorkerBudgetMixin")) {
+            int changed = WorkerPoolBytecode.apply(targetClass);
+            SmoothFix.LOGGER.info("Background worker budget: {} construction expression(s) patched after upstream mixins",changed);
+        }
+
+        if (mixinClassName.endsWith("ModelPartAllocationMixin")) {
+            String matrixOwner = loader.getMappingResolver().mapClassName("intermediary", "net.minecraft.class_4587").replace('.', '/');
+            String multiplyName = loader.getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_4587",
+                    "method_22907", "(Lorg/joml/Quaternionf;)V");
+            int changed = ModelRotationBytecode.apply(targetClass, matrixOwner, multiplyName);
+            SmoothFix.LOGGER.info("Model rotation allocation fix: {} expression(s) replaced; unchanged if upstream already optimized", changed);
+        }
     }
 }

@@ -8,7 +8,10 @@
     "EmiCompatPluginMixin",
     "TumbleweedClientInitMixin",
     "ObscureTooltipFoodMixin",
-    "EmiRepairIngredientMixin"
+    "EmiRepairIngredientMixin",
+    "ModelPartAllocationMixin",
+    "ClientFrameTimingMixin",
+    "DragonScanMarkerMixin"
   ],
   "injectors": {
     "defaultRequire": 0

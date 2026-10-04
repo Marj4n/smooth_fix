@@ -10,6 +10,15 @@ base {
     archivesName = project.archives_base_name
 }
 
+// Keep classes and resources in one mod group, including during early adapter loading in dev.
+loom {
+    mods {
+        smooth_fix {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
 repositories {
     // Add repositories to retrieve artifacts from in here.
     // You should only use this when depending on other mods because
@@ -61,6 +70,26 @@ java {
     // if it is present.
     // If you remove this line, sources will not be generated.
     withSourcesJar()
+}
+
+// Isolated verification fixture; never included in the distributable Smooth Fix JAR.
+sourceSets {
+    verification {
+        java.srcDir 'verification/runtime'
+        resources.srcDir 'verification/resources'
+        compileClasspath += sourceSets.main.compileClasspath + sourceSets.main.output
+        runtimeClasspath += sourceSets.main.runtimeClasspath
+    }
+}
+tasks.register('verificationJar', Jar) {
+    from sourceSets.verification.output
+    archiveClassifier = 'verification-dev'
+}
+tasks.register('remapVerificationJar', net.fabricmc.loom.task.RemapJarTask) {
+    dependsOn tasks.named('verificationJar')
+    inputFile = tasks.named('verificationJar').flatMap { it.archiveFile }
+    archiveClassifier = 'verification-only'
+    addNestedDependencies = false
 }
 
 jar {
