@@ -9,7 +9,7 @@ public final class StackSamples {
     private final Map<String,Integer> groups=new LinkedHashMap<>();
     private int total,replacements;
     private static final int LIMIT=256;
-    private static final String[] GROUPS={"bewitchment","saintsdragons","aaaparticles","Effekseer","xaero","tclayer","trinkets","flywheel","sodiumdynamiclights","sodium","iris","smooth_classes","smooth_fix","extraspellattributes"};
+    private static final String[] GROUPS={"bewitchment","saintsdragons","aaaparticles","Effekseer","xaero","tclayer","trinkets","flywheel","sodiumdynamiclights","sodium","iris","smooth_classes","smooth_fix","extraspellattributes","fancymenu","dynamic_resource_bars","presencefootsteps","jeremyseqsdamageindicators","dev.emi"};
     public synchronized void add(StackTraceElement[] trace){
         StringBuilder text=new StringBuilder();
         for(int i=0;i<Math.min(24,trace.length);i++)text.append(trace[i].getClassName()).append('#').append(trace[i].getMethodName()).append('\n');

@@ -39,6 +39,10 @@ public final class SmoothFixMixinPlugin implements IMixinConfigPlugin {
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
         SmoothFixConfig config = SmoothFixConfig.get();
 
+        if (mixinClassName.endsWith("ResourceBarTemperatureMarkerMixin")) return config.resourceBarTemperatureLookupFix && auditedVersion("dynamic_resource_bars", "0.8.1");
+        if (mixinClassName.endsWith("FootstepTargetCacheMixin")) return config.presenceFootstepTargetCacheFix && auditedVersion("presencefootsteps", "1.10.1+1.20.1");
+        if (mixinClassName.endsWith("DragonSoundScanMarkerMixin")) return config.saintsDragonSoundScanFix && auditedVersion("saintsdragons", "0.9.85");
+
         if (mixinClassName.endsWith("MobEquipmentMarkerMixin")) return config.betterMobCombatEquipmentSlotFix && auditedVersion("bettermobcombat", "1.3.0");
         if (mixinClassName.endsWith("EnhancedCelestialsShaderPromptMixin")) return config.enhancedCelestialsShaderPromptSuppression && auditedVersion("enhancedcelestials2core", "1.0.3.3");
 
@@ -132,6 +136,18 @@ public final class SmoothFixMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
+        if (mixinClassName.endsWith("ResourceBarTemperatureMarkerMixin")) {
+            String player = loader.getMappingResolver().mapClassName("intermediary", "net.minecraft.class_1657").replace('.', '/');
+            SmoothFix.LOGGER.info("Resource Bars temperature lookup: {} audited method(s) cached",
+                    org.marj4n.smooth_fix.performance.ResourceBarTemperatureBytecode.apply(targetClass, player));
+        }
+        if (mixinClassName.endsWith("DragonSoundScanMarkerMixin")) {
+            String client = loader.getMappingResolver().mapClassName("intermediary", "net.minecraft.class_310").replace('.', '/');
+            String world = loader.getMappingResolver().mapClassName("intermediary", "net.minecraft.class_638").replace('.', '/');
+            String entities = loader.getMappingResolver().mapMethodName("intermediary", "net.minecraft.class_638", "method_18112", "()Ljava/lang/Iterable;");
+            SmoothFix.LOGGER.info("Dragon sound entity index ({}): {} audited scan(s) optimized", targetClassName,
+                    org.marj4n.smooth_fix.performance.DragonSoundScanBytecode.apply(targetClass, client, world, entities));
+        }
         if (mixinClassName.endsWith("MobEquipmentMarkerMixin")) {
             String slot = loader.getMappingResolver().mapClassName("intermediary", "net.minecraft.class_1304").replace('.', '/');
             SmoothFix.LOGGER.info("Better Mob Combat equipment slot guard: {} audited handler(s) optimized",

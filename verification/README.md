@@ -29,5 +29,5 @@ exits before a game window. Server full-suite tests simulate client responses, u
 reduced actor counts and advance timestamps. They do not measure user GPU/FPS or
 prove a full graphical multiplayer traversal or PlayerAbilityLib integration.
 
-Advanced6 has not run these fixtures. Build and run them locally if required;
+Advanced8 Laptop has not run these fixtures. Build and run them locally if required;
 keeping fixture source in this archive does not claim that its checks passed.
