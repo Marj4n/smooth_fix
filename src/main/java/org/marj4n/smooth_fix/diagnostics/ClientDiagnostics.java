@@ -13,7 +13,14 @@ import org.marj4n.smooth_fix.config.SmoothFixConfig;
 public final class ClientDiagnostics implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
-        if (SmoothFixConfig.get().saintsDragonEntityScanFix && net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("saintsdragons")) org.marj4n.smooth_fix.performance.RelevantDragonEntities.install();
+        if (SmoothFixConfig.get().presenceFootstepTargetCacheFix) {
+            net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.DISCONNECT.register(
+                    (handler, client) -> org.marj4n.smooth_fix.performance.FootstepTargetCache.clear());
+        }
+        if ((SmoothFixConfig.get().saintsDragonEntityScanFix || SmoothFixConfig.get().saintsDragonSoundScanFix)
+                && net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("saintsdragons")) {
+            org.marj4n.smooth_fix.performance.RelevantDragonEntities.install();
+        }
         if (!SmoothFixConfig.get().diagnostics) return;
         org.marj4n.smooth_fix.benchmark.ClientBenchmark.install();
         org.marj4n.smooth_fix.benchmark.AdvancedClient.install();

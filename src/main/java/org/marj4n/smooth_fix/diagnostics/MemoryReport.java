@@ -41,7 +41,10 @@ public final class MemoryReport {
                 "confirmedTeleportAnchorFix",config.confirmedTeleportAnchorFix,
                 "trinketsSnapshotAllocationFix",config.trinketsSnapshotAllocationFix,
                 "accessoriesEmptyBufferFlushFix",config.accessoriesEmptyBufferFlushFix,
-                "emiSearchSafetyFix",config.emiSearchSafetyFix));
+                "emiSearchSafetyFix",config.emiSearchSafetyFix,
+                "resourceBarTemperatureLookupFix",config.resourceBarTemperatureLookupFix,
+                "saintsDragonSoundScanFix",config.saintsDragonSoundScanFix,
+                "presenceFootstepTargetCacheFix",config.presenceFootstepTargetCacheFix));
         report.put("heapBytes", usage(ManagementFactory.getMemoryMXBean().getHeapMemoryUsage()));
         report.put("nonHeapBytes", usage(ManagementFactory.getMemoryMXBean().getNonHeapMemoryUsage()));
         List<Map<String, Object>> pools = new ArrayList<>();

@@ -74,6 +74,15 @@ public final class ClientFrameProfiler {
         scene.put("biomeBlendRadius",client.options.getBiomeBlendRadius().getValue());
         scene.put("framebufferWidth", client.getWindow().getFramebufferWidth());
         scene.put("framebufferHeight", client.getWindow().getFramebufferHeight());
+        scene.put("gpuVendor", org.lwjgl.opengl.GL11.glGetString(org.lwjgl.opengl.GL11.GL_VENDOR));
+        scene.put("gpuRenderer", org.lwjgl.opengl.GL11.glGetString(org.lwjgl.opengl.GL11.GL_RENDERER));
+        scene.put("openGlVersion", org.lwjgl.opengl.GL11.glGetString(org.lwjgl.opengl.GL11.GL_VERSION));
+        Map<String, String> versions = new LinkedHashMap<>();
+        for (String mod : java.util.List.of("sodium", "iris", "fancymenu", "dynamic_resource_bars", "presencefootsteps", "saintsdragons", "emi")) {
+            net.fabricmc.loader.api.FabricLoader.getInstance().getModContainer(mod).ifPresent(container ->
+                    versions.put(mod, container.getMetadata().getVersion().getFriendlyString()));
+        }
+        scene.put("clientCompatibilityVersions", versions);
         if (client.world != null) scene.put("dimension", client.world.getRegistryKey().getValue().toString());
         if (client.player != null) scene.put("position", Map.of("x",client.player.getX(),"y",client.player.getY(),"z",client.player.getZ()));
         return scene;

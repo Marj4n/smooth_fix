@@ -40,6 +40,10 @@ public final class SmoothFixConfig {
     public boolean modelRotationAllocationFix = true;
     public boolean bewitchmentSigilSearchFix = true;
     public boolean saintsDragonEntityScanFix = true;
+    public boolean saintsDragonSoundScanFix = true;
+    public boolean resourceBarTemperatureLookupFix = true;
+    /** Laptop opt-in: target discovery is cached for at most one simulation tick. */
+    public boolean presenceFootstepTargetCacheFix = false;
     public boolean trinketsRegexAllocationFix = true;
     public boolean trinketsSnapshotAllocationFix = true;
     public boolean accessoriesEmptyBufferFlushFix = true;
