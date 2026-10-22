@@ -1,0 +1,13 @@
+name: Verify mod source layout
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  layout:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Marj4n Java/Fabric source layout
+        run: python3 scripts/check_structure.py
