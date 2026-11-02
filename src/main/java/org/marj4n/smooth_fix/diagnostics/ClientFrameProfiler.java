@@ -29,9 +29,8 @@ public final class ClientFrameProfiler {
         if (active != null || client.world == null) return false;
         Recording recording = new Recording(client, seconds, automaticSave);
         active = recording;
-        Thread thread = new Thread(recording, "Smooth Fix Frame Sampler");
-        thread.setDaemon(true);
-        thread.start();
+        if(recording.stackSampling || automaticSave){Thread thread = new Thread(recording, "Smooth Fix Frame Sampler");
+        thread.setDaemon(true);thread.start();}
         return true;
     }
 
@@ -93,6 +92,7 @@ public final class ClientFrameProfiler {
         private final Thread renderThread = Thread.currentThread();
         private final int seconds;
         private final boolean automaticSave;
+        private final boolean stackSampling;
         private final int targetFps;
         private final long budgetNanos;
         private final TimingSamples intervals;
@@ -110,6 +110,7 @@ public final class ClientFrameProfiler {
 
         private Recording(MinecraftClient client, int seconds, boolean automaticSave) {
             this.automaticSave = automaticSave;
+            this.stackSampling=automaticSave || SmoothFixConfig.get().benchmarkStackSampling;
             this.client = client;
             this.seconds = seconds;
             int configured = SmoothFixConfig.get().diagnosticTargetFps;
@@ -127,7 +128,7 @@ public final class ClientFrameProfiler {
             try {
                 while (!stop && (!automaticSave || System.nanoTime() < deadline) && client.isRunning()) {
                     long start = frameStart;
-                    if (working && System.nanoTime() - start > budgetNanos) {
+                    if (stackSampling && working && System.nanoTime() - start > budgetNanos) {
                         StackTraceElement[] trace = renderThread.getStackTrace();
                         if (working && frameStart == start) {
                             stacks.add(trace);
@@ -152,11 +153,13 @@ public final class ClientFrameProfiler {
             report.put("sceneAtStart", sceneStart);
             report.put("sceneAtEnd", scene(client));
             report.put("elapsedSeconds", (System.nanoTime()-started)/1_000_000_000.0);
-            report.put("frameIntervals", intervals.snapshot());
+            var intervalSummary=intervals.snapshot();
+            report.put("frameIntervals",intervalSummary);
+            report.put("fpsFromIntervals",TimingSamples.frameRates(intervalSummary));
             report.put("frameWorkBeforePresent", work.snapshot());
             report.put("frameTimeline",timeline.snapshot());
             report.put("frameTimelineNote","Exact 1-second totals, up to 600 seconds, assigned by sample completion time. Includes loading/preparation in advanced stages. Empty buckets can indicate a long stall; no per-second percentiles or GPU measurements.");
-            report.put("sampler", Map.of("requestedSeconds",seconds,"intervalMs",10,"thresholdMs",budgetNanos/1_000_000.0,"targetFps",targetFps));
+            report.put("sampler", Map.of("requestedSeconds",seconds,"intervalMs",10,"thresholdMs",budgetNanos/1_000_000.0,"targetFps",targetFps,"stackSamplingEnabled",stackSampling));
             report.put("slowFrameStacks", stacks.snapshot());
             report.put("measurementNote", "Entire recording totals; percentile reservoir is bounded to 8192. Work excludes presentation/FPS waits. Intervals include waits. GPU time is not measured. Sampling adds overhead. Stack estimates include error bounds; observations are not CPU percentages.");
             if (save) try {

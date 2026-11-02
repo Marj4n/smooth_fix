@@ -4,6 +4,7 @@ package org.marj4n.smooth_fix.benchmark;
 public final class AdvancedStageInfo {
     public static String task(String mode) {
         return switch (mode) {
+            case "entities" -> "Observing the requested native AI mob crowd in actual terrain";
             case "panorama" -> "Observing terrain, entity and particle rendering";
             case "route" -> "Walking through loaded terrain";
             case "cold_route" -> "Walking into new terrain; measuring chunk generation";
@@ -33,7 +34,7 @@ public final class AdvancedStageInfo {
     public static String legacyTask(String name,String mode){return task(name.equals("baseline")?"baseline":name.startsWith("village")?"village":name.startsWith("wither")?"wither":mode);}
     public static boolean walking(String mode) {
         return switch (mode) {
-            case "route", "cold_route", "structure", "combat", "effects", "bloodmoon", "wither", "break", "weather", "nether", "end" -> true;
+            case "route", "cold_route", "structure", "combat", "effects", "bloodmoon", "break", "nether", "end" -> true;
             default -> false;
         };
     }

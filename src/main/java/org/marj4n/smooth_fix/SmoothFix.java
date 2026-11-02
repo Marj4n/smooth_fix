@@ -12,7 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class SmoothFix implements ModInitializer {
     public static final String MOD_ID = "smooth_fix";
     public static final String MOD_NAME = "Smooth Fix";
-    public static final String BUILD_ID = "1.0.5-perf-r2-advanced8-laptop";
+    public static final String BUILD_ID = "1.0.5-horizon-r4-dev-20261102";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_NAME);
 
     private static final Set<String> LOGGED_PATCHES = ConcurrentHashMap.newKeySet();
@@ -20,8 +20,13 @@ public final class SmoothFix implements ModInitializer {
     @Override
     public void onInitialize() {
         SmoothFixConfig config = SmoothFixConfig.get();
+        org.marj4n.smooth_fix.performance.LifecycleRetentionCleanup.install();
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
+            if (net.fabricmc.loader.api.FabricLoader.getInstance().getEnvironmentType() == net.fabricmc.api.EnvType.SERVER)
+                org.marj4n.smooth_fix.performance.ReportIo.shutdown();
+        });
 
-        if (config.diagnostics) {
+        if (config.diagnostics && config.profilingTelemetry) {
             ServerDiagnostics.install();
             org.marj4n.smooth_fix.benchmark.ServerBenchmark.install();
             org.marj4n.smooth_fix.benchmark.AdvancedBenchmark.install();

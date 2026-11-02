@@ -22,17 +22,17 @@ public final class SnapshotCheck {
             for(int i=0;i<random.nextInt(65);i++)source.put("slot_"+i,random.nextInt(9));
             UnaryOperator<String> keys=key->key.replace("slot_", "trinket_");
             BiFunction<String,Integer,String> values=(key,value)->key+":"+value;
-            Map<String,String> wrapped=(Map<String,String>)constructor.newInstance("verification",String.class,String.class,
+            Map<?,?> wrapped=(Map<?,?>)constructor.newInstance("verification",String.class,String.class,
                     source,keys,UnaryOperator.identity(),values,Function.identity());
             Set<Map.Entry<String,String>> expected=original(source,keys,values);
-            Set<Map.Entry<String,String>> actual=wrapped.entrySet();
+            Set<? extends Map.Entry<?,?>> actual=wrapped.entrySet();
             if(!expected.equals(actual) || !new ArrayList<>(expected).equals(new ArrayList<>(actual)))throw new AssertionError("snapshot/order changed");
             source.put("slot_new",test);
             if(!expected.equals(actual) || !original(source,keys,values).equals(wrapped.entrySet()))throw new AssertionError("snapshot/live refresh changed");
             if(!actual.isEmpty()) {
-                try {actual.iterator().next().setValue("changed");throw new AssertionError("mutable entry");}catch(UnsupportedOperationException correct) { }
+                try {actual.iterator().next().setValue(null);throw new AssertionError("mutable entry");}catch(UnsupportedOperationException correct) { }
             }
-            try {actual.add(Map.entry("extra","extra"));throw new AssertionError("mutable set");}catch(UnsupportedOperationException correct) { }
+            try {actual.add(null);throw new AssertionError("mutable set");}catch(UnsupportedOperationException correct) { }
         }
         Map<String,Integer> nullSource=new LinkedHashMap<>();nullSource.put("one",1);nullSource.put("two",2);
         Map<?,?> wrapped=(Map<?,?>)constructor.newInstance("verification",String.class,String.class,nullSource,

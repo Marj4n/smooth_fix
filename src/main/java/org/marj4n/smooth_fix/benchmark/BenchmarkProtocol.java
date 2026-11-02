@@ -8,5 +8,7 @@ public final class BenchmarkProtocol {
     public static final Identifier ADVANCED_RESPONSE=new Identifier("smooth_fix","advanced_response_v3");
     public static final Identifier RUN_RESULT=new Identifier("smooth_fix","benchmark_run_result_v1");
     public static final Identifier RUN_ACK=new Identifier("smooth_fix","benchmark_run_ack_v1");
+    public static final Identifier BASELINE_REQUEST=new Identifier("smooth_fix","benchmark_baseline_request_v1");
+    public static final Identifier BASELINE_RESPONSE=new Identifier("smooth_fix","benchmark_baseline_response_v1");
     private BenchmarkProtocol() { }
 }

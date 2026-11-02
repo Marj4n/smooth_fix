@@ -1,3 +1,5 @@
+HORIZON MAINTENANCE DEV 2026-11-01: current validated status is in TEST_RESULTS_HORIZON_DEV.md and VALIDATION_HORIZON_DEV.json. New keys / RD12 procedure / existing controller: CONFIG_AND_STRESS_DEV.md. The retained guide below describes the original Advanced8 baseline.
+
 SMOOTH FIX 1.0.5 — ADVANCED6 SOURCE
 Internal build: 1.0.5-perf-r2-advanced7
 Minecraft 1.20.1 Fabric. Public version: 1.0.5-1.20.1.

@@ -1,0 +1,17 @@
+{
+  "build": "1.0.5-horizon-dev-20261101",
+  "public_version_changed": false,
+  "classes_unit_tests": 53,
+  "queue_statistics_assertions": 23,
+  "functional_runtime_assertions_before_final_hud_cleanup": 244,
+  "native_slot_roundtrips": 60,
+  "legacy_nbt_stacks_preserved": 20,
+  "minimal_modelpart_cases": 1000,
+  "fullpack_modelpart_comparison": "failed with optimization on and off; no pass claimed",
+  "rd12_passive_pair": "completed; exploratory cap60; no meaningful gameplay speedup proven",
+  "multiplayer_two_clients": "not run",
+  "full_advanced_suite": "not run",
+  "primary_pack_modified": false,
+  "push": false,
+  "published": false
+}

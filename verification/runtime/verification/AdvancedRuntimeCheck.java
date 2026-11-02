@@ -40,14 +40,14 @@ public final class AdvancedRuntimeCheck implements ModInitializer {
         deadline=System.nanoTime()+420_000_000_000L;
         player=new ServerPlayerEntity(server,server.getOverworld(),new GameProfile(UUID.randomUUID(),"AdvancedFixture"));server.getPlayerManager().onPlayerConnect(connection,player);
         Object addon=Class.forName("net.fabricmc.fabric.impl.networking.server.ServerNetworkingImpl").getMethod("getAddon",ServerPlayNetworkHandler.class).invoke(null,player.networkHandler);
-        ((Set<Identifier>)field(addon.getClass().getSuperclass(),"sendableChannels").get(addon)).add(BenchmarkProtocol.ADVANCED_CONTROL);
+        VerificationReflection.addToSet(field(addon.getClass().getSuperclass(),"sendableChannels").get(addon),BenchmarkProtocol.ADVANCED_CONTROL);
         player.changeGameMode(GameMode.ADVENTURE);player.teleport(server.getOverworld(),-123.5,150,-321.5,30,15);
         player.getInventory().setStack(0,new ItemStack(Items.DIAMOND,7));player.getInventory().setStack(35,new ItemStack(Items.APPLE,13));player.getInventory().selectedSlot=3;
         originalInventory=player.getInventory().writeNbt(new net.minecraft.nbt.NbtList()).toString();
         plan("panorama","chest","lootr","inventory","combat","tnt","weather","save");
         startCommand(server);Object r=run();field(r.getClass(),"phaseAt").setLong(r,System.nanoTime()-45_000_000_000L);step=1;
     }catch(Throwable t){fail(server,t);}}
-    private void startCommand(MinecraftServer server)throws Exception{if(server.getCommandManager().executeWithPrefix(player.getCommandSource().withLevel(4),"smoothfix stress advanced start world-copy")!=1 || run()==null)throw new AssertionError("advanced start failed");}
+    private void startCommand(MinecraftServer server)throws Exception{VerificationReflection.advertiseBaseline(player);if(server.getCommandManager().executeWithPrefix(player.getCommandSource().withLevel(4),"smoothfix stress advanced start world-copy")!=1)throw new AssertionError("advanced preflight failed");VerificationReflection.finishFixturePreflight(player);if(run()==null)throw new AssertionError("advanced start failed after fixture ACK");}
     private void accept(Object r,int phase,int action,String data)throws Exception{Method m=AdvancedBenchmark.class.getDeclaredMethod("response",ServerPlayerEntity.class,UUID.class,int.class,int.class,String.class);m.setAccessible(true);m.invoke(null,player,field(r.getClass(),"id").get(r),phase,action,data);}
     private void tick(MinecraftServer server){if(step==0)return;try{
         if(System.nanoTime()>deadline)throw new AssertionError("advanced fixture timeout");Object r=run();
@@ -58,9 +58,9 @@ public final class AdvancedRuntimeCheck implements ModInitializer {
             phaseTicks++;int cx=player.getChunkPos().x,cz=player.getChunkPos().z;for(int dx=-1;dx<=1;dx++)for(int dz=-1;dz<=1;dz++)player.getServerWorld().setChunkForced(cx+dx,cz+dz,true);accept(r,phase,1,"");accept(r,phase,3,"");
             if(Set.of("chest","lootr").contains(stage.mode) && phaseTicks==2){BlockPos pos=(BlockPos)field(r.getClass(),"container").get(r);var world=player.getServerWorld();world.getBlockState(pos).onUse(world,player,Hand.MAIN_HAND,new net.minecraft.util.hit.BlockHitResult(Vec3d.ofCenter(pos),Direction.UP,pos,false));if(player.currentScreenHandler==player.playerScreenHandler)throw new AssertionError(stage.mode+" did not open native handler");for(int i=0;i<player.currentScreenHandler.slots.size()-36;i++)if(player.currentScreenHandler.getSlot(i).hasStack()){player.currentScreenHandler.onSlotClick(i,0,SlotActionType.QUICK_MOVE,player);break;}}
             if(stage.mode.equals("inventory") && phaseTicks==2)player.playerScreenHandler.onSlotClick(9,0,SlotActionType.SWAP,player);
-            if(stage.mode.equals("combat") && phaseTicks==1){for(Entity e:(List<Entity>)field(r.getClass(),"actors").get(r))if(e instanceof MobEntity mob)mob.setAiDisabled(true);}
+            if(stage.mode.equals("combat") && phaseTicks==1){for(Entity e:VerificationReflection.list(field(r.getClass(),"actors").get(r),Entity.class))if(e instanceof MobEntity mob)mob.setAiDisabled(true);}
             if(stage.mode.equals("break") && phaseTicks==2){var w=player.getServerWorld();int y=w.getTopY(net.minecraft.world.Heightmap.Type.MOTION_BLOCKING_NO_LEAVES,player.getBlockX(),player.getBlockZ());BlockPos pos=new BlockPos(player.getBlockX(),y-1,player.getBlockZ());player.teleport(w,pos.getX()+.5,y+1,pos.getZ()+.5,0,65);if(!player.interactionManager.tryBreakBlock(pos))throw new AssertionError("native terrain break refused");}
-            if(stage.mode.equals("combat") && phaseTicks==15){List<Entity> actors=(List<Entity>)field(r.getClass(),"actors").get(r);for(Entity e:actors)if(e instanceof MobEntity && e.getType()==EntityType.HUSK){player.attack(e);break;}}
+            if(stage.mode.equals("combat") && phaseTicks==15){List<Entity> actors=VerificationReflection.list(field(r.getClass(),"actors").get(r),Entity.class);for(Entity e:actors)if(e instanceof MobEntity && e.getType()==EntityType.HUSK){player.attack(e);break;}}
             // Weather visibility and Wither charge-up must finish before fixture timestamps advance.
             boolean nativeWitherReady=true;
             if(stage.mode.equals("wither")){Object recording=field(r.getClass(),"chunks").get(r);nativeWitherReady=((Map<?,?>)field(recording.getClass(),"counters").get(recording)).containsKey("explosions");}
@@ -68,17 +68,17 @@ public final class AdvancedRuntimeCheck implements ModInitializer {
             return;
         }
         if(step==5 && r==null){
-            Object c=field(AdvancedBenchmark.class,"completed").get(null);accept(c,phaseSeen,2,"{\"workloadValidated\":true,\"fixtureClient\":true}");Map<?,?> report=(Map<?,?>)field(c.getClass(),"report").get(c);List<Map<String,Object>> stages=(List<Map<String,Object>>)report.get("stages");
+            Object c=field(AdvancedBenchmark.class,"completed").get(null);accept(c,phaseSeen,2,"{\"workloadValidated\":true,\"fixtureClient\":true}");Map<?,?> report=(Map<?,?>)field(c.getClass(),"report").get(c);List<Map<?,?>> stages=VerificationReflection.maps(report.get("stages"));
             if(stages.size()!=21)throw new AssertionError("full transition coverage: "+stages.size());
-            for(Map<String,Object> stage:stages){String status=String.valueOf(stage.get("status"));if(!status.equals("passed") && !status.startsWith("skipped"))throw new AssertionError("full transition failed: "+stage.get("name")+" "+status+" "+stage.get("serverWorkloadValidation"));}
+            for(Map<?,?> stage:stages){String status=String.valueOf(stage.get("status"));if(!status.equals("passed") && !status.startsWith("skipped"))throw new AssertionError("full transition failed: "+stage.get("name")+" "+status+" "+stage.get("serverWorkloadValidation"));}
             assertRestored(server);pass("all 21 default advanced server transitions completed or explicitly skipped; client responses simulated; native terrain, actors, dimensions, weather and save exercised");
             plan("weather");startCommand(server);r=run();accept(r,0,1,"");field(r.getClass(),"heartbeat").setLong(r,System.nanoTime()-31_000_000_000L);step=4;return;
         }
         if(step==2){
             Object c=field(AdvancedBenchmark.class,"completed").get(null);accept(c,phaseSeen,2,"{\"workloadValidated\":true,\"fixtureClient\":true}");Map<?,?> report=(Map<?,?>)field(c.getClass(),"report").get(c);
             if(!String.valueOf(report.get("status")).startsWith("completed"))throw new AssertionError("advanced suite failed: "+report);
-            List<Map<String,Object>> stages=(List<Map<String,Object>>)report.get("stages");if(stages.size()!=8)throw new AssertionError("stage count");
-            for(Map<String,Object> s:stages){String mode=(String)s.get("mode");if(!s.containsKey("server") || !s.containsKey("chunkAndMechanicMetrics"))throw new AssertionError("missing stage recorder");
+            List<Map<?,?>> stages=VerificationReflection.maps(report.get("stages"));if(stages.size()!=8)throw new AssertionError("stage count");
+            for(Map<?,?> s:stages){String mode=(String)s.get("mode");if(!s.containsKey("server") || !s.containsKey("chunkAndMechanicMetrics"))throw new AssertionError("missing stage recorder");
                 String expected=switch(mode){case "chest","lootr"->"native_open_and_loot_received";case "combat"->"player_damage_accepted";case "inventory"->"inventory_changes_observed";case "tnt"->"native_explosion_and_terrain_destruction_observed";default->null;};if(expected!=null && !expected.equals(s.get("serverWorkloadValidation")))throw new AssertionError(mode+" missing successful action: "+s);
             }
             if(!Boolean.TRUE.equals(report.get("environmentRestored")) || !Boolean.TRUE.equals(report.get("playerRestored")))throw new AssertionError("recovery failed");if(!"completed".equals(report.get("status")))throw new AssertionError("incorrect aggregate after client reports: "+report.get("status"));if(!Boolean.TRUE.equals(((Map<?,?>)report.get("recoveryVerification")).get("all")))throw new AssertionError("server recovery verification missing");assertRestored(server);
@@ -109,14 +109,14 @@ public final class AdvancedRuntimeCheck implements ModInitializer {
         structurePlan("#minecraft:village",true);startCommand(server);Object r=run();Object search=field(r.getClass(),"structureSearch").get(r);if(search==null)throw new AssertionError("village search not incremental");
         Method skip=r.getClass().getDeclaredMethod("skip",String.class);skip.setAccessible(true);skip.invoke(r,"skipped_structure_not_found_in_radius");
         if(run()!=r || field(r.getClass(),"phase").getInt(r)!=1)throw new AssertionError("missing village aborted instead of continuing");
-        var results=(List<Map<String,Object>>)field(r.getClass(),"results").get(r);if(!"not_exercised_skipped".equals(results.get(0).get("serverWorkloadValidation")) || !results.get(0).containsKey("measurementStatus"))throw new AssertionError("skip report incomplete");
+        var results=VerificationReflection.maps(field(r.getClass(),"results").get(r));if(!"not_exercised_skipped".equals(results.get(0).get("serverWorkloadValidation")) || !results.get(0).containsKey("measurementStatus"))throw new AssertionError("skip report incomplete");
         if(!field(search.getClass(),"closed").getBoolean(search))throw new AssertionError("skip did not close search");AdvancedBenchmark.stop();assertRestored(server);
         pass("original missing-village skip with empty structure map retains recording, continues to panorama and restores player without NullPointerException");
         structurePlan("smooth_fix:missing_structure",true);startCommand(server);r=run();if(field(r.getClass(),"phase").getInt(r)!=1)throw new AssertionError("unregistered structure did not skip");AdvancedBenchmark.stop();assertRestored(server);
         pass("unregistered structure skip safely advances to next stage");
-        structurePlan("#minecraft:village",true);startCommand(server);r=run();((Set)field(r.getClass(),"optionalStructures").get(r)).add(field(r.getClass(),"stage").get(r));field(r.getClass(),"preparationAt").setLong(r,System.nanoTime()-91_000_000_000L);
+        structurePlan("#minecraft:village",true);startCommand(server);r=run();VerificationReflection.addToSet(field(r.getClass(),"optionalStructures").get(r),field(r.getClass(),"stage").get(r));field(r.getClass(),"preparationAt").setLong(r,System.nanoTime()-91_000_000_000L);
         Method budgetTick=r.getClass().getDeclaredMethod("tick");budgetTick.setAccessible(true);budgetTick.invoke(r);if(field(r.getClass(),"phase").getInt(r)!=1)throw new AssertionError("optional structure budget did not advance");
-        var budgetResults=(List<Map<String,Object>>)field(r.getClass(),"results").get(r);if(!"skipped_optional_structure_search_budget".equals(budgetResults.get(0).get("measurementStatus")))throw new AssertionError("optional structure budget not reported");AdvancedBenchmark.stop();assertRestored(server);
+        var budgetResults=VerificationReflection.maps(field(r.getClass(),"results").get(r));if(!"skipped_optional_structure_search_budget".equals(budgetResults.get(0).get("measurementStatus")))throw new AssertionError("optional structure budget not reported");AdvancedBenchmark.stop();assertRestored(server);
         pass("optional mod structure search exceeding 90 seconds skips explicitly and continues; mandatory village search remains unlimited");
         plan("route");startCommand(server);r=run();if(player.getAbilities().flying || !player.getAbilities().allowFlying || !player.getAbilities().invulnerable)throw new AssertionError("walking stage still flies or lacks protection");AdvancedBenchmark.stop();assertRestored(server);
         pass("walking stages use grounded protected survival; stop restores original abilities and player state");

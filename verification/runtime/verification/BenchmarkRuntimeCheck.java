@@ -38,7 +38,7 @@ public final class BenchmarkRuntimeCheck implements ModInitializer {
         server.getPlayerManager().onPlayerConnect(connection,player);
         player.changeGameMode(GameMode.ADVENTURE);player.teleport(server.getOverworld(),123.5,200,321.5,30,15);
         Object addon=Class.forName("net.fabricmc.fabric.impl.networking.server.ServerNetworkingImpl").getMethod("getAddon",ServerPlayNetworkHandler.class).invoke(null,player.networkHandler);
-        Class<?> base=addon.getClass().getSuperclass();Field channels=field(base,"sendableChannels");((Set<Identifier>)channels.get(addon)).add(BenchmarkProtocol.CONTROL);
+        Class<?> base=addon.getClass().getSuperclass();Field channels=field(base,"sendableChannels");VerificationReflection.addToSet(channels.get(addon),BenchmarkProtocol.CONTROL);
         BenchmarkRecovery.save(player);player.changeGameMode(GameMode.CREATIVE);player.teleport(server.getWorld(ServerBenchmark.ARENA),0,70,0,0,0);
         if(!BenchmarkRecovery.restore(player) || player.getWorld()!=server.getOverworld() || player.interactionManager.getGameMode()!=GameMode.ADVENTURE || player.getX()!=123.5)throw new AssertionError("persisted recovery changed state");
         System.out.println("SMOOTHFIX_VERIFY_PASS persisted recovery restores dimension, location, mode and abilities");
@@ -86,9 +86,9 @@ public final class BenchmarkRuntimeCheck implements ModInitializer {
             Object completed=field(ServerBenchmark.class,"completed").get(null);
             Map<?,?> report=(Map<?,?>)field(completed.getClass(),"report").get(completed);
             if(!"completed".equals(report.get("status")))throw new AssertionError("Suite aborted: "+report.get("status"));
-            List<Map<String,Object>> stages=(List<Map<String,Object>>)report.get("stages");
+            List<Map<?,?>> stages=VerificationReflection.maps(report.get("stages"));
             if(stages.size()!=10)throw new AssertionError("Expected ten automatic stages");
-            for(Map<String,Object> stage:stages) {
+            for(Map<?,?> stage:stages) {
                 if(!"complete".equals(stage.get("status")))continue;
                 Map<?,?> start=(Map<?,?>)stage.get("worldAtStart"),end=(Map<?,?>)stage.get("worldAtEnd"),profile=(Map<?,?>)stage.get("server");
                 if(start==null || end==null || !profile.containsKey("tickStartIntervals") || !profile.containsKey("garbageCollectorDeltas"))throw new AssertionError("missing stage diagnostics");

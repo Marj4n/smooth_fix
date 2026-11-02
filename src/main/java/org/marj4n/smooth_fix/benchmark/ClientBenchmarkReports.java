@@ -1,6 +1,8 @@
 package org.marj4n.smooth_fix.benchmark;
 
 import com.google.gson.*;
+import com.google.gson.reflect.TypeToken;
+import java.lang.reflect.Type;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.*;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
@@ -12,8 +14,11 @@ import java.io.IOException;
 
 /** Shared writer for legacy and advanced controllers; a failed/partial stage retains its samples. */
 public final class ClientBenchmarkReports {
+    private static final Type RESULT_MAP_TYPE = new TypeToken<Map<String,Object>>(){}.getType();
     private static BenchmarkClientReport report;
-    private static Map<String,Object> expected;
+    private static Map<String,Object> expected,serverExpected;
+    private static final Map<UUID,Map<String,Object>> originalClients=new LinkedHashMap<>();
+    private static boolean originalClientRequired,originalClientAvailable;
     private static UUID recovering;
     private static long recoveryDeadline;
     private static long nextRecoveryCheck;
@@ -21,20 +26,37 @@ public final class ClientBenchmarkReports {
     private ClientBenchmarkReports() { }
     public static void install(){
         if(installed)return;installed=true;
+        ClientPlayNetworking.registerGlobalReceiver(BenchmarkProtocol.BASELINE_REQUEST,(client,handler,buf,sender)->{
+            UUID run=buf.readUuid();client.execute(()->{
+                Map<String,Object> response=new LinkedHashMap<>();
+                try{
+                    if(client.player==null||client.world==null||client.interactionManager==null||org.marj4n.smooth_fix.diagnostics.ClientFrameProfiler.isActive())throw new IllegalStateException("Client unavailable or another frame recorder active");
+                    var snapshot=RecoverySnapshot.captureLocal(client.player,client.interactionManager.getCurrentGameMode().getId());
+                    if(!Boolean.TRUE.equals(snapshot.get("inventoryProjectionAvailable")))throw new IllegalStateException("Native item codec unsupported");
+                    originalClients.clear();originalClients.put(run,snapshot);response.put("ready",true);response.put("snapshot",snapshot);response.put("entityRenderDistanceMultiplier",net.minecraft.entity.Entity.getRenderDistanceMultiplier());
+                }catch(Exception failure){response.put("ready",false);response.put("error",failure.getClass().getSimpleName());}
+                if(ClientPlayNetworking.canSend(BenchmarkProtocol.BASELINE_RESPONSE)){var reply=PacketByteBufs.create();reply.writeUuid(run);reply.writeString(new Gson().toJson(response),24000);ClientPlayNetworking.send(BenchmarkProtocol.BASELINE_RESPONSE,reply);}
+            });
+        });
         ClientPlayNetworking.registerGlobalReceiver(BenchmarkProtocol.RUN_RESULT,(client,handler,buf,sender)->{
             String json=buf.readString(24000);client.execute(()->{
                 try{
                     JsonObject packet=JsonParser.parseString(json).getAsJsonObject();UUID id=UUID.fromString(packet.get("runId").getAsString());
                     if(report==null||!report.belongsTo(id))return;
-                    report.serverResult(new Gson().fromJson(packet,Map.class));
+                    report.serverResult(new Gson().fromJson(packet,RESULT_MAP_TYPE));
                     if(!packet.has("expectedRecovery"))return;
-                    expected=new Gson().fromJson(packet.get("expectedRecovery"),Map.class);recovering=id;recoveryDeadline=System.nanoTime()+10_000_000_000L;nextRecoveryCheck=0;
+                    serverExpected=new Gson().fromJson(packet.get("expectedRecovery"),RESULT_MAP_TYPE);
+                originalClientRequired=packet.has("originalClientBaselineRequired")&&packet.get("originalClientBaselineRequired").getAsBoolean();
+                originalClientAvailable=!originalClientRequired||originalClients.containsKey(id);
+                expected=originalClientRequired?originalClients.remove(id):serverExpected;
+                if(expected==null)expected=Map.of("requiredOriginalClientSnapshotMissing",true);
+                recovering=id;recoveryDeadline=System.nanoTime()+10_000_000_000L;nextRecoveryCheck=0;
                     report.recovery(Map.of("all",false,"status","pending"));
                 }catch(Exception e){SmoothFix.LOGGER.error("Final benchmark result could not be stored",e);}
             });
         });
         ClientTickEvents.END_CLIENT_TICK.register(ClientBenchmarkReports::verifyRecovery);
-        ClientPlayConnectionEvents.DISCONNECT.register((handler,client)->{end("disconnected");expected=null;recovering=null;});
+        ClientPlayConnectionEvents.DISCONNECT.register((handler,client)->{end("disconnected");report=null;expected=null;recovering=null;serverExpected=null;originalClients.clear();});
     }
     public static void begin(UUID run,String suite)throws IOException{
         if(report!=null&&report.belongsTo(run))return;
@@ -58,8 +80,12 @@ public final class ClientBenchmarkReports {
         Map<String,Object> actual=Map.of();
         if(client.player==null||client.world==null||client.interactionManager==null)result=new LinkedHashMap<>(Map.of("all",false,"status","player_not_ready"));
         else{
-            actual=RecoverySnapshot.capture(client.player,client.interactionManager.getCurrentGameMode().getId());
+            actual=originalClientRequired?RecoverySnapshot.captureLocal(client.player,client.interactionManager.getCurrentGameMode().getId()):RecoverySnapshot.capture(client.player,client.interactionManager.getCurrentGameMode().getId());
             result=RecoverySnapshot.compare(expected,actual);
+            result.put("originalClientBaselineAvailable",originalClientAvailable);if(!originalClientAvailable)result.put("all",false);
+            result.put("verificationBasis",originalClientRequired?"same_client_full_original_snapshot_before_server_mutation":"legacy_server_peer_snapshot");
+            // Retain cross-peer differences as evidence; they can predate the benchmark.
+            if(originalClientRequired&&serverExpected!=null)result.put("serverPeerComparison",RecoverySnapshot.compare(serverExpected,RecoverySnapshot.capture(client.player,client.interactionManager.getCurrentGameMode().getId())));
             result.put("handledScreenClosed",client.currentScreen==null);if(client.currentScreen!=null)result.put("all",false);
         }
         if(!Boolean.TRUE.equals(result.get("all"))&&System.nanoTime()<recoveryDeadline)return;

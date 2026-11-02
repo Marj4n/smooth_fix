@@ -13,6 +13,9 @@ import org.marj4n.smooth_fix.config.SmoothFixConfig;
 public final class ClientDiagnostics implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
+        org.marj4n.smooth_fix.performance.InventoryAccessoryButtons.install();
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents.CLIENT_STOPPING.register(
+                client -> org.marj4n.smooth_fix.performance.ReportIo.shutdown());
         if (SmoothFixConfig.get().presenceFootstepTargetCacheFix) {
             net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.DISCONNECT.register(
                     (handler, client) -> org.marj4n.smooth_fix.performance.FootstepTargetCache.clear());
@@ -21,7 +24,7 @@ public final class ClientDiagnostics implements ClientModInitializer {
                 && net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("saintsdragons")) {
             org.marj4n.smooth_fix.performance.RelevantDragonEntities.install();
         }
-        if (!SmoothFixConfig.get().diagnostics) return;
+        if (!SmoothFixConfig.get().diagnostics || !SmoothFixConfig.get().profilingTelemetry) return;
         org.marj4n.smooth_fix.benchmark.ClientBenchmark.install();
         org.marj4n.smooth_fix.benchmark.AdvancedClient.install();
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(

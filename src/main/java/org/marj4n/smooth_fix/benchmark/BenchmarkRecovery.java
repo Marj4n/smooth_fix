@@ -33,12 +33,13 @@ public final class BenchmarkRecovery {
         if(Files.exists(file(player.getServer(),player.getUuid())))throw new IOException("Unresolved recovery journal must not be overwritten");
         var a=player.getAbilities();NbtCompound extras=new NbtCompound();
         if(full){extras.put("inventory",player.getInventory().writeNbt(new NbtList()));extras.putInt("selected",player.getInventory().selectedSlot);extras.putFloat("health",player.getHealth());player.getHungerManager().writeNbt(extras);extras.putInt("xpLevel",player.experienceLevel);extras.putFloat("xpProgress",player.experienceProgress);extras.putInt("xpTotal",player.totalExperience);}
+        if(full)extras.put("statusEffects",StatusEffectRecovery.capture(player.getStatusEffects()));
         State state=new State(player.getWorld().getRegistryKey().getValue().toString(),player.getX(),player.getY(),player.getZ(),player.getYaw(),player.getPitch(),player.interactionManager.getGameMode().getId(),a.flying,a.allowFlying,a.invulnerable,a.getFlySpeed(),a.getWalkSpeed(),full?extras.toString():null,null,null);
         atomic(file(player.getServer(),player.getUuid()),GSON.toJson(state));
     }
     public static void atomic(Path target,String text)throws IOException{
         Files.createDirectories(target.getParent());Path temp=target.resolveSibling(target.getFileName()+".tmp");Files.writeString(temp,text,StandardCharsets.UTF_8);
-        try{Files.move(temp,target,StandardCopyOption.REPLACE_EXISTING,StandardCopyOption.ATOMIC_MOVE);}catch(AtomicMoveNotSupportedException e){Files.move(temp,target,StandardCopyOption.REPLACE_EXISTING);}
+        org.marj4n.smooth_fix.performance.AtomicFilePublication.publish(temp,target);
     }
     public static boolean restore(ServerPlayerEntity player){
         Path path=file(player.getServer(),player.getUuid());if(!Files.exists(path))return true;
@@ -49,10 +50,13 @@ public final class BenchmarkRecovery {
             // Parse all inventory data before changing anything, including older advanced1 journals.
             NbtCompound extras=state.extras==null?new NbtCompound():StringNbtReader.parse(state.extras);
             if(state.inventorySnbt!=null){extras.put("inventory",StringNbtReader.parse(state.inventorySnbt).getList("Inventory",10));extras.putInt("selected",state.selectedSlot==null?0:state.selectedSlot);}
+            // Decode every effect before any mutation; unknown IDs retain the journal.
+            var restoredEffects=extras.contains("statusEffects")?StatusEffectRecovery.decode(extras.getList("statusEffects",10)):null;
             BenchmarkAbilities.revoke(player);player.closeHandledScreen();player.changeGameMode(GameMode.byId(state.gameMode));
             player.teleport(world,state.x,state.y,state.z,state.yaw,state.pitch);player.setVelocity(net.minecraft.util.math.Vec3d.ZERO);player.fallDistance=0;
             var a=player.getAbilities();a.flying=state.flying;a.allowFlying=state.allowFlying;a.invulnerable=state.invulnerable;a.setFlySpeed(state.flySpeed);a.setWalkSpeed(state.walkSpeed);
             if(extras.contains("inventory")){player.getInventory().clear();player.getInventory().readNbt(extras.getList("inventory",10));player.getInventory().selectedSlot=extras.getInt("selected");}
+            if(restoredEffects!=null){player.clearStatusEffects();for(var effect:restoredEffects)player.addStatusEffect(effect);}
             if(extras.contains("health")){player.setHealth(extras.getFloat("health"));player.getHungerManager().readNbt(extras);player.experienceLevel=extras.getInt("xpLevel");player.experienceProgress=extras.getFloat("xpProgress");player.totalExperience=extras.getInt("xpTotal");}
             player.getInventory().markDirty();player.playerScreenHandler.syncState();player.sendAbilitiesUpdate();
             if(player.networkHandler!=null){player.networkHandler.sendPacket(new UpdateSelectedSlotS2CPacket(player.getInventory().selectedSlot));if(extras.contains("health"))player.networkHandler.sendPacket(new ExperienceBarUpdateS2CPacket(player.experienceProgress,player.totalExperience,player.experienceLevel));}
@@ -63,7 +67,8 @@ public final class BenchmarkRecovery {
                 NbtCompound hunger=new NbtCompound();player.getHungerManager().writeNbt(hunger);boolean hungerMatches=true;for(String key:hunger.getKeys())if(!Objects.equals(hunger.get(key),extras.get(key)))hungerMatches=false;
                 result.put("health",Math.abs(player.getHealth()-extras.getFloat("health"))<.0001);result.put("hunger",hungerMatches);result.put("experience",player.experienceLevel==extras.getInt("xpLevel")&&player.totalExperience==extras.getInt("xpTotal")&&Math.abs(player.experienceProgress-extras.getFloat("xpProgress"))<.0001);
             }
-            result.put("all",result.values().stream().allMatch(Boolean.TRUE::equals));verifications.put(player.getUuid(),result);
+            if(restoredEffects!=null)result.put("statusEffects",extras.getList("statusEffects",10).equals(StatusEffectRecovery.capture(player.getStatusEffects())));
+            result.put("all",result.values().stream().allMatch(Boolean.TRUE::equals));result.put("statusEffectsJournaled",restoredEffects!=null);verifications.put(player.getUuid(),result);
             if(!Boolean.TRUE.equals(result.get("all")))throw new IOException("Recovery equality failed: "+result);
             Files.delete(path);return true;
         }catch(Exception e){SmoothFix.LOGGER.error("Benchmark recovery retained for {}",player.getUuid(),e);verifications.put(player.getUuid(),Map.of("all",false,"reason",e.toString()));return false;}
