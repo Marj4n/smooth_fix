@@ -21,7 +21,9 @@ public final class ServerDiagnostics {
     private static int tickIndex;
     private static volatile long tickStart;
     private static volatile boolean inTick;
-    private static volatile Thread serverThread;
+    // Live JVM threads remain strongly rooted by the VM. A weak observer avoids
+    // retaining a stopped thread's task closure and its entire integrated server.
+    private static volatile java.lang.ref.WeakReference<Thread> serverThread = new java.lang.ref.WeakReference<>(null);
     private static volatile Profile activeProfile;
 
     private ServerDiagnostics() { }
@@ -30,7 +32,8 @@ public final class ServerDiagnostics {
         ServerLifecycleEvents.SERVER_STARTING.register(server -> reset());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> stopProfile());
         ServerTickEvents.START_SERVER_TICK.register(server -> {
-            serverThread = Thread.currentThread();
+            Thread current = Thread.currentThread();
+            if (serverThread.get() != current) serverThread = new java.lang.ref.WeakReference<>(current);
             tickStart = System.nanoTime();
             inTick = true;
             Profile profile = activeProfile;
@@ -136,7 +139,7 @@ public final class ServerDiagnostics {
     public static synchronized boolean startRecording() {
         if (activeProfile != null) return false;
         Profile p = new Profile(0, false); activeProfile = p;
-        Thread t = new Thread(p, "Smooth Fix Benchmark Sampler"); t.setDaemon(true); t.start(); return true;
+        if(org.marj4n.smooth_fix.config.SmoothFixConfig.get().benchmarkStackSampling){Thread t = new Thread(p, "Smooth Fix Benchmark Sampler");t.setDaemon(true);t.start();}return true;
     }
     public static synchronized Map<String,Object> finishRecording() {
         Profile p = activeProfile;
@@ -171,7 +174,7 @@ public final class ServerDiagnostics {
             long deadline = seconds == 0 ? Long.MAX_VALUE : started + seconds*1_000_000_000L;
             try {
                 while (!stop && System.nanoTime()<deadline) {
-                    Thread target=serverThread; long start=tickStart;
+                    Thread target=serverThread.get(); long start=tickStart;
                     if(target!=null && inTick && System.nanoTime()-start>50_000_000L) {
                         StackTraceElement[] trace=target.getStackTrace();
                         if(!stop && inTick && tickStart==start) stacks.add(trace);

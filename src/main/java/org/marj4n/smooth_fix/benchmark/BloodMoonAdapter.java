@@ -25,6 +25,22 @@ public final class BloodMoonAdapter {
         enableData(world,data);
     }
     public static void enableInWorld(ServerWorld world)throws ReflectiveOperationException {enableData(world,forecastForWorld(world));}
+    /** Prepare a real native fade-ready night even when the copied world freezes daylight. */
+    public static java.util.Map<String,Object> prepareActiveNight(ServerWorld world)throws ReflectiveOperationException {
+        Object data=forecastForWorld(world);Object settings=data.getClass().getMethod("getDimensionSettings").invoke(data);
+        long length=((Number)settings.getClass().getMethod("dayLength").invoke(settings)).longValue();
+        long night=((Number)settings.getClass().getMethod("nightStartTime").invoke(settings)).longValue();
+        // Installed EC2 Core1.0.3.3 getBlend uses a100-world-tick fade. Do not falsify its state.
+        if(length<=102||night<0||night>length-103)throw new IllegalStateException("No native100tick fade-ready nighttime window");
+        long before=world.getTimeOfDay(),base=Math.floorDiv(before,length)*length;
+        long scheduled=Math.max(before,base+night);if(scheduled+101>=base+length)scheduled=base+length+night;
+        boolean daylight=world.getGameRules().getBoolean(net.minecraft.world.GameRules.DO_DAYLIGHT_CYCLE);
+        world.setTimeOfDay(scheduled);enableData(world,data);world.setTimeOfDay(scheduled+101);
+        RegistryEntry<?> current=(RegistryEntry<?>)data.getClass().getMethod("currentLunarEventHolder").invoke(data);
+        java.util.Map<String,Object> result=new java.util.LinkedHashMap<>();result.put("policy","Native setLunarEventTonight followed by101worldticks of clock phase preparation before timed action; no gamerule, native event field or visual-density changes. Original full forecast/time/weather restored by journal.");
+        result.put("clockBefore",before);result.put("nativeScheduledClock",scheduled);result.put("preparedClock",world.getTimeOfDay());result.put("nativeDayLength",length);result.put("nativeNightStart",night);result.put("daylightRuleBefore",daylight);result.put("daylightRuleUnchanged",daylight==world.getGameRules().getBoolean(net.minecraft.world.GameRules.DO_DAYLIGHT_CYCLE));result.put("nativeBlend",data.getClass().getMethod("getBlend").invoke(data));result.put("nativeBloodMoonSelected",current.matchesId(BLOOD_MOON));result.put("nativeEventActive",data.getClass().getMethod("isEventActive").invoke(data));return result;
+    }
+
     private static void enableData(ServerWorld world,Object data)throws ReflectiveOperationException {
         Registry<Object> registry=world.getRegistryManager().get(RegistryKey.ofRegistry(new Identifier("enhancedcelestials2core","lunar/event")));
         Object event=registry.getOrEmpty(BLOOD_MOON).orElseThrow(()->new IllegalStateException("Blood Moon registry entry missing"));
@@ -39,14 +55,13 @@ public final class BloodMoonAdapter {
         Object data=forecastForWorld(world);RegistryEntry<?> event=(RegistryEntry<?>)data.getClass().getMethod("currentLunarEventHolder").invoke(data);
         return event.matchesId(BLOOD_MOON) && (boolean)data.getClass().getMethod("isEventActive").invoke(data);
     }
-    @SuppressWarnings("unchecked")
     public static void reset(ServerWorld world) {
         if(!available() || world==null)return;
         try {
             Object data=forecast(world);Object settings=data.getClass().getMethod("getDimensionSettings").invoke(data);
             RegistryKey<?> defaultKey=(RegistryKey<?>)settings.getClass().getMethod("defaultEvent").invoke(settings);
             Registry<Object> registry=world.getRegistryManager().get(RegistryKey.ofRegistry(defaultKey.getRegistry()));
-            RegistryEntry<?> entry=registry.entryOf((RegistryKey<Object>)defaultKey);
+            Object value=registry.getOrEmpty(defaultKey.getValue()).orElseThrow();RegistryEntry<?> entry=registry.getEntry(registry.getRawId(value)).orElseThrow();
             data.getClass().getMethod("setLunarEventTonight",RegistryEntry.class).invoke(data,entry);
         }catch(Exception e){org.marj4n.smooth_fix.SmoothFix.LOGGER.warn("Could not reset isolated benchmark lunar forecast",e);}
     }

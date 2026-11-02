@@ -2,11 +2,9 @@ package org.marj4n.smooth_fix.benchmark;
 
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.nbt.NbtList;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.*;
 
-/** Fields available on both peers. Exact inventory hash avoids oversized final packets. */
+/** Peer fields use the native shared item-wire view; server full saved-NBT equality remains separate. */
 public final class RecoverySnapshot {
     private RecoverySnapshot() { }
     public static Map<String,Object> capture(PlayerEntity player, int gameMode) {
@@ -18,12 +16,34 @@ public final class RecoverySnapshot {
         out.put("selectedSlot",player.getInventory().selectedSlot);out.put("gameMode",gameMode);
         out.put("flying",a.flying);out.put("allowFlying",a.allowFlying);out.put("invulnerable",a.invulnerable);
         out.put("flySpeed",a.getFlySpeed());out.put("walkSpeed",a.getWalkSpeed());
-        out.put("inventorySha256",inventoryHash(player));
+        NbtList inventory;
+        try{inventory=NetworkInventoryProjection.capture(player.getInventory());out.put("inventoryProjectionAvailable",true);}
+        catch(RuntimeException unsupported){
+            out.put("inventoryProjectionAvailable",false);out.put("inventoryProjectionError",unsupported.getClass().getSimpleName());
+            out.put("inventorySha256","unavailable");out.put("inventoryHashFormat","network-item-stack-v2");out.put("inventorySlotHashes",Map.of());
+            return out;
+        }
+        out.put("inventorySha256",CanonicalNbtHash.sha256(inventory));out.put("inventoryHashFormat","network-item-stack-v2");
+        // Derive diagnostics from the SAME serialization, without exposing item names or NBT values.
+        Map<String,String> slots=new LinkedHashMap<>();
+        for(int i=0;i<inventory.size();i++){
+            var item=inventory.getCompound(i);String key="slot_"+item.getInt("Slot");
+            if(slots.containsKey(key))key+="_duplicate_"+i;
+            slots.put(key,CanonicalNbtHash.sha256(item));
+        }
+        out.put("inventorySlotHashes",slots);
+        return out;
+    }
+    /** Hash ALL original client save NBT too; no tag/empty-compound blacklist. */
+    public static Map<String,Object> captureLocal(PlayerEntity player,int gameMode){
+        var out=capture(player,gameMode);var saved=player.getInventory().writeNbt(new NbtList());
+        out.put("localSavedInventorySha256",CanonicalNbtHash.sha256(saved));out.put("localSavedInventoryFormat","canonical-nbt-v1");
+        out.put("health",player.getHealth());out.put("foodLevel",player.getHungerManager().getFoodLevel());out.put("saturation",player.getHungerManager().getSaturationLevel());
+        out.put("xpLevel",player.experienceLevel);out.put("xpProgress",player.experienceProgress);out.put("xpTotal",player.totalExperience);
         return out;
     }
     public static String inventoryHash(PlayerEntity player) {
-        try {return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(player.getInventory().writeNbt(new NbtList()).toString().getBytes(StandardCharsets.UTF_8)));}
-        catch(java.security.NoSuchAlgorithmException e){throw new IllegalStateException(e);}
+        return CanonicalNbtHash.sha256(player.getInventory().writeNbt(new NbtList()));
     }
     public static Map<String,Object> compare(Map<String,Object> expected,Map<String,Object> actual) {
         Map<String,Object> result=new LinkedHashMap<>();
@@ -33,6 +53,8 @@ public final class RecoverySnapshot {
             else equal=Objects.equals(value,now);
             result.put(key,equal);
         });
+        // Two unsupported projections can never validate one another as equal.
+        if(expected.containsKey("inventoryProjectionAvailable")&&(!Boolean.TRUE.equals(expected.get("inventoryProjectionAvailable"))||!Boolean.TRUE.equals(actual.get("inventoryProjectionAvailable"))))result.put("inventoryProjectionAvailable",false);
         result.put("all",!expected.isEmpty() && result.values().stream().allMatch(Boolean.TRUE::equals));
         return result;
     }

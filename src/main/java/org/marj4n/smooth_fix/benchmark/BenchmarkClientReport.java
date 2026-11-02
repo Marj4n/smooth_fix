@@ -16,13 +16,14 @@ public final class BenchmarkClientReport {
     public BenchmarkClientReport(UUID run, Path directory, String suite, String build) throws IOException {
         this.run = run;
         file = directory.resolve("benchmark_client_" + run + ".json");
-        report.put("schemaVersion", 2);
+        report.put("schemaVersion", 3);
+        report.put("independentJvm", BenchmarkSession.snapshot());
         report.put("runId", run.toString());
         report.put("suite", suite);
         report.put("build", build);
         report.put("status", "running");
         report.put("startedUtc", java.time.Instant.now().toString());
-        checkpoint();
+        checkpoint(true);
     }
 
     public boolean belongsTo(UUID id) { return run.equals(id); }
@@ -31,7 +32,7 @@ public final class BenchmarkClientReport {
 
     public void stage(int phase, Map<String, Object> stage) throws IOException {
         stages.put(phase, new LinkedHashMap<>(stage));
-        checkpoint();
+        checkpoint(false);
     }
 
     public void finish(String reason) throws IOException {
@@ -39,7 +40,7 @@ public final class BenchmarkClientReport {
         report.put("status", reason.equals("completed") ? BenchmarkOutcome.status(new ArrayList<>(stages.values())) : reason);
         report.put("finishedUtc", java.time.Instant.now().toString());
         report.put("summary", BenchmarkOutcome.counts(new ArrayList<>(stages.values())));
-        checkpoint();
+        checkpoint(true);
     }
 
     public void serverResult(Map<String,Object> server) throws IOException {
@@ -49,15 +50,12 @@ public final class BenchmarkClientReport {
     }
     public void recovery(Map<String, Object> recovery) throws IOException {
         report.put("clientRecoveryVerification", recovery);
-        checkpoint();
+        checkpoint(true);
     }
 
-    private void checkpoint() throws IOException {
-        report.put("stages", new ArrayList<>(stages.values()));
-        Files.createDirectories(file.getParent());
-        Path temporary = file.resolveSibling(file.getFileName() + ".tmp");
-        Files.writeString(temporary, new GsonBuilder().setPrettyPrinting().serializeNulls().create().toJson(report), StandardCharsets.UTF_8);
-        try { Files.move(temporary, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING); }
-        catch (AtomicMoveNotSupportedException e) { Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING); }
+    private void checkpoint(boolean durable) throws IOException {
+        report.put("stages",new ArrayList<>(stages.values()));
+        report.put("diagnosticIoAtCheckpoint",org.marj4n.smooth_fix.performance.ReportIo.metrics());
+        org.marj4n.smooth_fix.performance.ReportIo.checkpoint(file,report,durable);
     }
 }

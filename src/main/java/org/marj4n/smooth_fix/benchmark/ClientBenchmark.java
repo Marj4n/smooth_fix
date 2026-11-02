@@ -67,12 +67,12 @@ public final class ClientBenchmark {
         boolean worldReady=client.player!=null && client.world!=null
                 && client.player.getWorld()==client.world
                 && client.world.getRegistryKey().getValue().toString().equals(s.dimension);
-        BenchmarkStartupGate.Decision decision=s.startup.update(worldReady,client.currentScreen!=null,client.isWindowFocused());
+        BenchmarkStartupGate.Decision decision=s.startup.update(worldReady,client.currentScreen!=null,BenchmarkRenderFocus.valid(client));
         if(decision==BenchmarkStartupGate.Decision.WAIT)return;
         if(decision==BenchmarkStartupGate.Decision.ABORT){
             String actual=client.world==null?"no_world":client.world.getRegistryKey().getValue().toString();
             String screen=client.currentScreen==null?"none":client.currentScreen.getClass().getName();
-            s.abort(client,"interrupted after readiness: phase="+s.phase+", expected="+s.dimension+", actual="+actual+", screen="+screen+", focused="+client.isWindowFocused()+"; frame results invalidated");return;
+            s.abort(client,"interrupted after readiness: phase="+s.phase+", expected="+s.dimension+", actual="+actual+", screen="+screen+", focused="+BenchmarkRenderFocus.valid(client)+"; frame results invalidated");return;
         }
         if(decision==BenchmarkStartupGate.Decision.START){s.started=now-(long)(s.resumeElapsed*1e9);if(s.measuring)s.measuringAt=now-(long)(s.resumeElapsed*1e9);respond(s.run,s.phase,1,"");}
         double t=(now-s.started)/1e9;

@@ -23,13 +23,13 @@ public final class GroundCollisionTerrain implements GroundRoutePlanner.Terrain 
     private boolean loaded(Box box) {
         for (int x = MathHelper.floor(box.minX) >> 4; x <= MathHelper.floor(box.maxX) >> 4; x++)
             for (int z = MathHelper.floor(box.minZ) >> 4; z <= MathHelper.floor(box.maxZ) >> 4; z++)
-                if (!world.isChunkLoaded(new BlockPos(x * 16, 0, z * 16))) return false;
+                if (!world.isChunkLoaded(x,z)) return false;
         return true;
     }
     public boolean clear(Box box) { return loaded(box) && world.isSpaceEmpty(body, box); }
     public boolean water(double x,double y,double z) {
         BlockPos pos=BlockPos.ofFloored(x,y,z);
-        return world.isChunkLoaded(pos) && world.getFluidState(pos).isIn(FluidTags.WATER);
+        return world.isChunkLoaded(pos.getX()>>4,pos.getZ()>>4) && world.getFluidState(pos).isIn(FluidTags.WATER);
     }
     /** Recheck the actual swept direction, including inertia and corners, without generating chunks. */
     public boolean safeMotion(double x,double y,double z,double dx,double dz,double length) {

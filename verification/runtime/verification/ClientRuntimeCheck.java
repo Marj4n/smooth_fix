@@ -12,6 +12,7 @@ import java.util.Random;
 public class ClientRuntimeCheck {
     public static void run() {
         BenchmarkStartupCheck.run();
+        try { BatchReportCheck.main(new String[0]); } catch(Exception e) { throw new AssertionError("Diagnostic report regression",e); }
         ModelPart part = new ModelPart(List.of(), Map.of());
         MatrixStack stack = new MatrixStack();
         Random random = new Random(630);
@@ -34,6 +35,9 @@ public class ClientRuntimeCheck {
             startFrame |= method.getName().contains("smoothfix$startFrame");
             endWork |= method.getName().contains("smoothfix$endWork");
         }
+        boolean lifecycle=false;
+        for(var method:MinecraftClient.class.getDeclaredMethods()) lifecycle |= method.getName().contains("smoothfix$releasePreviousWorld");
+        if(!lifecycle) throw new AssertionError("World cache lifecycle injection missing");
         if(!startFrame || !endWork)throw new AssertionError("Client frame mixin did not apply");
         System.out.println("SMOOTHFIX_VERIFY_PASS production MinecraftClient frame timing mixin applied");
         if(!(net.minecraft.util.Util.getMainWorkerExecutor() instanceof java.util.concurrent.ForkJoinPool pool)

@@ -14,7 +14,7 @@ public final class BenchmarkAbilities {
     }
     public static void grant(ServerPlayerEntity player) {grant(player,true);}
     public static void grant(ServerPlayerEntity player,boolean flying) {
-        try {if(FabricLoader.getInstance().isModLoaded("playerabilitylib"))pal(player,true,flying);else {player.getAbilities().allowFlying=true;player.getAbilities().flying=flying;player.getAbilities().invulnerable=true;}if(!flying)player.getAbilities().flying=false;player.sendAbilitiesUpdate();}
+        try {if(FabricLoader.getInstance().isModLoaded("playerabilitylib"))pal(player,true,flying);else {player.getAbilities().allowFlying=true;player.getAbilities().flying=flying;player.getAbilities().invulnerable=true;}player.getAbilities().flying=flying;player.sendAbilitiesUpdate();}
         catch(Exception e){throw new IllegalStateException("Temporary benchmark ability grant failed",e);}
     }
     public static void revoke(ServerPlayerEntity player) {

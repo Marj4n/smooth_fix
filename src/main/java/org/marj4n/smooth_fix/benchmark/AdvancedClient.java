@@ -29,12 +29,17 @@ public final class AdvancedClient {
     private static EmiBenchmarkAdapter sharedEmi;
     private static UUID sharedEmiRun;
     private AdvancedClient() { }
+    /** Unique owned entities completing WorldRenderer's entity render call in an action frame. Not GPU occlusion queries. */
+    public static void renderFrameStarted(){Session s=active;if(s!=null){s.trackingFrame=s.ready && !s.recovering && (s.mode.equals("entities")||s.mode.equals("wither"));if(s.trackingFrame)s.renderedThisFrame.clear();}}
+    public static void entityRendered(Entity entity){Session s=active;if(s!=null && s.trackingFrame && s.renderOwnedIds.contains(entity.getId()))s.renderedThisFrame.add(entity.getId());}
+    public static void renderFrameEnded(){Session s=active;if(s==null||!s.trackingFrame)return;s.trackingFrame=false;int n=s.renderedThisFrame.size();s.renderFrames++;s.renderCountSum+=n;s.renderPeak=Math.max(s.renderPeak,n);s.renderMin=Math.min(s.renderMin,n);if(n>=s.requiredEntities)s.fullRenderFrames++;}
     public static boolean controlsMovement(){return active!=null;}
     public static Boolean controlledKey(KeyBinding key) {
         Session s=active;if(s==null || s.forward==null)return null;
         if(key==s.forward)return s.input.forward();
         if(key==s.jump)return s.input.jump();
         if(key==s.sprint)return s.input.sprint();
+        if(key==s.attack)return s.mode.equals("break")&&s.breakingTarget!=null;
         if(key==s.back || key==s.left || key==s.right || key==s.sneak || key==s.attack || key==s.use)return false;
         return null;
     }
@@ -47,7 +52,7 @@ public final class AdvancedClient {
         }else if(!s.prepared)state="Preparing the server workload";
         else if(client.player==null || client.world==null)state="Waiting for the world and player";
         else if(s.recovering)state="Respawn / recovery; waiting for the player before resuming";
-        else if(!s.ready)state=client.currentScreen!=null?"Close the screen/menu to start the test":!client.isWindowFocused()?"Focus the Minecraft window":"Waiting for chunks and the player position";
+        else if(!s.ready)state=client.currentScreen!=null?"Close the screen/menu to start the test":!BenchmarkRenderFocus.valid(client)?"Focus the Minecraft window":"Waiting for chunks and the player position";
         else {
             int remaining=Math.max(0,s.seconds-(int)((now-s.readyAt)/1e9));
             state="Stress "+remaining+" seconds remaining | "+(AdvancedStageInfo.walking(s.mode)?s.movementNote:s.ui()?s.uiNote:"Observing the native workload");
@@ -72,7 +77,8 @@ public final class AdvancedClient {
             if(active!=null)finish(client,false);
             if(ClientFrameProfiler.isActive()){reply(run,phase,0,"manual/legacy profile running");return;}
             try{ClientBenchmarkReports.begin(run,"actual_world_advanced_v2");}catch(Exception e){reply(run,phase,0,"run report could not start: "+e);return;}
-            active=new Session(data);active.bind(client);if(!ClientFrameProfiler.startBenchmark(client,600)){stopWithReason(client,"could not start frame recorder",0);return;}active.recording=true;
+            active=new Session(data);active.bind(client);int profileLimit=data.has("fpsLimit")?data.get("fpsLimit").getAsInt():0;if(profileLimit==60 || profileLimit==260){active.savedFpsLimit=client.options.getMaxFps().getValue();client.options.getMaxFps().setValue(profileLimit);}
+            if(!ClientFrameProfiler.startBenchmark(client,600)){stopWithReason(client,"could not start frame recorder",0);return;}active.recording=true;
         } else if(active!=null && active.run.equals(run)) {
             if(action==0){finish(client,true);return;}
             if(active.phase!=phase)return;
@@ -84,6 +90,11 @@ public final class AdvancedClient {
     }
     private static void reply(UUID run,int phase,int action,String data) {
         if(!ClientPlayNetworking.canSend(BenchmarkProtocol.ADVANCED_RESPONSE))return;
+        if(action==2&&(data.length()>24000||data.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>30000)){
+            try{for(String part:BenchmarkReportTransfer.encode(data))reply(run,phase,BenchmarkReportTransfer.PART_ACTION,part);}
+            catch(java.io.IOException e){SmoothFix.LOGGER.error("Advanced report transfer rejected; complete local report retained",e);reply(run,phase,2,"{\"workloadValidated\":false,\"error\":\"report_transfer_rejected_local_report_retained\"}");}
+            return;
+        }
         var buf=PacketByteBufs.create();buf.writeUuid(run);buf.writeInt(phase);buf.writeByte(action);buf.writeString(data,24000);ClientPlayNetworking.send(BenchmarkProtocol.ADVANCED_RESPONSE,buf);
     }
     public static boolean stop(MinecraftClient client){if(active==null)return false;stopWithReason(client,"explicit client stop",4);return true;}
@@ -93,15 +104,19 @@ public final class AdvancedClient {
         if(endRun && sharedEmi!=null){sharedEmi.restore();sharedEmi=null;}return;}
         active=null;
         try {
+            if(s.mode.equals("break")&&client!=null&&client.interactionManager!=null)client.interactionManager.cancelBlockBreaking();
             Map<String,Object> report=new LinkedHashMap<>(s.recording?ClientFrameProfiler.finishNow():Map.of());report.put("runId",s.run.toString());report.put("phase",s.phase);report.put("stage",s.name);report.put("mode",s.mode);report.put("requestedActionSeconds",s.seconds);report.put("actionWindowSeconds",s.readyAt==0?0:(System.nanoTime()-s.readyAt)/1e9);report.put("actions",s.metrics.snapshot());report.put("successfulActions",s.metrics.successes());report.put("error",s.error);report.put("observations",s.observations);
+            report.put("ownedEntityRendering",Map.of("targetCount",s.requiredEntities,"frames",s.renderFrames,"completedRendererCallsMean",s.renderFrames==0?0:(double)s.renderCountSum/s.renderFrames,"minimum",s.renderFrames==0?0:s.renderMin,"peak",s.renderPeak,"allTargetsFrames",s.fullRenderFrames,"allTargetsFrameFraction",s.renderFrames==0?0:(double)s.fullRenderFrames/s.renderFrames,"definition","Unique owned IDs completing WorldRenderer entity rendering; CPU invocation proof, not GPU visibility. Actual screenshots remain mandatory."));
+            report.put("preparation",s.preparationReport);report.put("measurementWindow",s.actionRecorderStarted?"action_after_client_readiness":"preparation_only");report.put("recoveryInActionWindow",s.recoveryInActionWindow);
             report.put("actionMeasurementNote","Native client interaction attempts and observed first Screen.renderWithTooltip completion / accepted EMI search results. First-render timings include scheduling/network waits, exclude GPU completion. API invocation latency is reported separately. No fake inventory linear-scan benchmark or claim that all mod-specific mechanics were exercised.");
             report.put("navigation",Map.of("horizontalDistanceBlocks",s.navigator.distance(),"maximumDisplacementBlocks",s.navigator.extent(),"state",s.navigator.status(),"strategy","bounded reachable ground/water paths; continuous ledge braking; native swimming/jumps; no sneak","horizontalCollisionAtEnd",client!=null && client.player!=null && client.player.horizontalCollision));
             report.put("emiQueryFailures",s.queryFailures);report.put("workloadValidated",s.validated() && s.error==null && s.queryFailures.isEmpty());
             String path=ClientBenchmarkReports.stage(s.run,s.phase,report);Map<String,Object> summary=new LinkedHashMap<>();summary.put("localReportFile",path);
-            for(String key:List.of("runId","phase","stage","mode","elapsedSeconds","frameIntervals","frameWorkBeforePresent","garbageCollectorDeltas","sceneAtStart","sceneAtEnd","actions","successfulActions","workloadValidated","navigation","error","status"))if(report.containsKey(key))summary.put(key,report.get(key));
-            String json=GSON.toJson(summary);if(json.length()>24000){summary.put("actions",Map.of("successfulActions",s.metrics.successes(),"detail","Full action report retained in client file"));json=GSON.toJson(summary);}reply(s.run,s.phase,2,json);
+            for(String key:List.of("runId","phase","stage","mode","elapsedSeconds","frameIntervals","frameWorkBeforePresent","garbageCollectorDeltas","sceneAtStart","sceneAtEnd","actions","successfulActions","workloadValidated","navigation","ownedEntityRendering","measurementWindow","recoveryInActionWindow","preparation","error","status"))if(report.containsKey(key))summary.put(key,report.get(key));
+            String json=GSON.toJson(summary);reply(s.run,s.phase,2,json);
             SmoothFix.LOGGER.info("Advanced benchmark phase {}: {}",s.phase,path);
         }catch(Exception e){SmoothFix.LOGGER.error("Advanced client report failed",e);}
+        if(client!=null && s.savedFpsLimit!=-1)client.options.getMaxFps().setValue(s.savedFpsLimit);
         if(s.owns(client.currentScreen) && client.player!=null)client.player.closeHandledScreen();
         if(client!=null && client.player!=null)client.player.setSprinting(false);
         if(endRun)ClientBenchmarkReports.end(s.error==null?"awaiting_server_result":s.error);
@@ -144,13 +159,14 @@ public final class AdvancedClient {
             if(now-s.heartbeat>1_000_000_000L){s.heartbeat=now;reply(s.run,s.phase,3,"");}
             boolean worldReady=client.player!=null && client.world!=null && client.player.getWorld()==client.world && client.world.getRegistryKey().getValue().toString().equals(s.dimension);
             if(worldReady && s.prepared && client.player.isAlive() && client.currentScreen instanceof net.minecraft.client.gui.screen.DeathScreen)client.setScreen(null);
-            if(!s.ready){if(now-s.preparationProgressAt>125_000_000_000L){stopWithReason(client,"client loading/preparation timeout",0);return;}if(!s.prepared || !worldReady || client.currentScreen!=null || !client.isWindowFocused() || client.player.squaredDistanceTo(s.x,s.y,s.z)>4096 || !client.world.isChunkLoaded(client.player.getBlockPos()))return;s.ready=true;s.readyAt=now-(long)(s.resumeElapsed*1e9);reply(s.run,s.phase,1,"");}
+            if(!s.ready){if(now-s.preparationProgressAt>125_000_000_000L){stopWithReason(client,"client loading/preparation timeout",0);return;}if(!s.prepared || !worldReady || client.currentScreen!=null || !BenchmarkRenderFocus.valid(client) || client.player.squaredDistanceTo(s.x,s.y,s.z)>4096 || !client.world.isChunkLoaded(client.player.getBlockX()>>4,client.player.getBlockZ()>>4))return;if(!s.nativeEntitiesReady(client))return;if(!s.actionRecorderStarted){s.preparationReport=ClientFrameProfiler.finishNow();if(!ClientFrameProfiler.startBenchmark(client,600)){stopWithReason(client,"action frame recorder conflict",0);return;}s.actionRecorderStarted=true;}else s.recoveryInActionWindow=true;
+                s.ready=true;s.readyAt=System.nanoTime()-(long)(s.resumeElapsed*1e9);reply(s.run,s.phase,1,"");}
             if(client.currentScreen instanceof net.minecraft.client.gui.screen.DeathScreen || client.player!=null && !client.player.isAlive()){
                 s.recovering=true;s.movementNote="Player died; waiting for server respawn before resuming this stage";if(!s.deathNotified){s.deathNotified=true;s.metrics.count("player_death_observed");reply(s.run,s.phase,7,"death_screen");}return;
             }
             if(s.recovering)return;
             s.deathNotified=false;
-            if(!client.isWindowFocused()){stopWithReason(client,"window lost focus",0);return;}
+            if(!BenchmarkRenderFocus.valid(client)){stopWithReason(client,"window lost focus",0);return;}
             if(!worldReady){if(now-s.worldMissingAt>120_000_000_000L && s.worldMissingAt!=0)stopWithReason(client,"world transition timeout",0);else if(s.worldMissingAt==0)s.worldMissingAt=now;return;}s.worldMissingAt=0;
             if(client.currentScreen!=null && !s.owns(client.currentScreen)){stopWithReason(client,"unexpected screen: "+client.currentScreen.getClass().getName(),0);return;}
             double t=(now-s.readyAt)/1e9;
@@ -159,7 +175,21 @@ public final class AdvancedClient {
             if(now-s.observedAt>1_000_000_000L){s.observedAt=now;if(s.observations.size()<360){s.observations.add(Map.of("movementState",s.movementNote,"walkedBlocks",s.navigator.distance(),"flying",client.player.getAbilities().flying,"sneakInput",s.input==null?false:controlledKey(s.sneak)));s.observations.add(Map.of("seconds",t,"controllerStep",s.step,"screen",client.currentScreen==null?"none":client.currentScreen.getClass().getName(),"selectedSlot",client.player.getInventory().selectedSlot,"swapPending",s.swapAt!=0,"particles",client.particleManager.getDebugString(),"entities",client.worldRenderer.getEntitiesDebugString(),"x",client.player.getX(),"y",client.player.getY(),"z",client.player.getZ()));}}
             if(s.ui()) {driveUi(client,s,now);return;}
             if(s.mode.equals("tnt")){client.player.setYaw((float)(t*24));client.player.setPitch(40);s.metrics.count("tnt_observer_camera_ticks");return;}
-            if(s.mode.equals("panorama") || s.mode.equals("save") || s.mode.equals("teleport")){client.player.setYaw((float)(t*25));client.player.setPitch(20);s.metrics.count("world_camera_ticks");return;}
+            if(s.mode.equals("weather")){
+                client.player.setYaw((float)(t*25));client.player.setPitch(25);s.input=GroundNavigator.Input.NONE;s.metrics.count("world_camera_ticks");
+                if(client.world.isRaining()&&client.world.getRainGradient(1)>.2F&&client.world.getBiome(client.player.getBlockPos()).value().getPrecipitation(client.player.getBlockPos())==net.minecraft.world.biome.Biome.Precipitation.RAIN&&client.world.isSkyVisible(client.player.getBlockPos()))s.metrics.count("native_rain_client_state_observed");return;
+            }
+            if(s.mode.equals("wither")){
+                Vec3d center=Vec3d.ZERO;int living=0;for(int id:s.entities){Entity e=client.world.getEntityById(id);if(e instanceof net.minecraft.entity.boss.WitherEntity && e.isAlive()){center=center.add(e.getEyePos());living++;}}
+                if(living>0){Vec3d aim=center.multiply(1.0/living).subtract(client.player.getEyePos());client.player.setYaw((float)(Math.toDegrees(Math.atan2(aim.z,aim.x))-90));client.player.setPitch((float)-Math.toDegrees(Math.atan2(aim.y,Math.hypot(aim.x,aim.z))));}else client.player.setPitch(70);
+                s.input=GroundNavigator.Input.NONE;s.metrics.count("native_wither_observer_camera_ticks");s.metrics.count("world_camera_ticks");return;
+            }
+            if(s.mode.equals("entities")){client.player.setYaw(s.observerYaw);client.player.setPitch(s.observerPitch);s.metrics.count("world_camera_ticks");return;}
+            if(s.mode.equals("panorama") || s.mode.equals("save") || s.mode.equals("teleport")){client.player.setYaw((float)(t*25));client.player.setPitch(s.mode.equals("entities")?40:20);s.metrics.count("world_camera_ticks");return;}
+            if(s.mode.equals("structure")){
+                Vec3d position=client.player.getPos();if(s.routeStallPosition==null||position.squaredDistanceTo(s.routeStallPosition)>.25){s.routeStallPosition=position;s.routeStallAt=now;}
+                else if(now-s.routeStallAt>8_000_000_000L){s.routeLeg++;s.routeStallAt=now;s.routeStallPosition=position;s.metrics.count("stalled_structure_waypoint_reselected");}
+            }
             double tx,tz;
             if(Set.of("route","cold_route","break").contains(s.mode)){
                 tx=s.x+s.routeLeg*12;tz=s.z+Math.sin(s.routeLeg*.4)*12;
@@ -195,9 +225,15 @@ public final class AdvancedClient {
                 for(int id:s.entities){Entity e=client.world.getEntityById(id);if(e instanceof MobEntity mob && mob.isAlive() && e.squaredDistanceTo(client.player)<distance){target=e;distance=e.squaredDistanceTo(client.player);}}
                 if(target!=null){client.interactionManager.attackEntity(client.player,target);client.player.swingHand(Hand.MAIN_HAND);s.metrics.count("native_attacks_sent");}
             }
-            if(s.mode.equals("break") && client.interactionManager!=null && client.crosshairTarget instanceof BlockHitResult hit && hit.getType()==net.minecraft.util.hit.HitResult.Type.BLOCK && client.player.squaredDistanceTo(Vec3d.ofCenter(hit.getBlockPos()))<25) {
-                client.interactionManager.attackBlock(hit.getBlockPos(),hit.getSide());client.interactionManager.updateBlockBreakingProgress(hit.getBlockPos(),hit.getSide());client.player.swingHand(Hand.MAIN_HAND);s.metrics.count("native_break_attempts");
+            if(s.mode.equals("break")){
+                boolean valid=client.interactionManager!=null&&client.crosshairTarget instanceof BlockHitResult hit&&hit.getType()==net.minecraft.util.hit.HitResult.Type.BLOCK&&client.player.squaredDistanceTo(Vec3d.ofCenter(hit.getBlockPos()))<25&&Math.hypot(hit.getBlockPos().getX()+.5-client.player.getX(),hit.getBlockPos().getZ()+.5-client.player.getZ())>=.8&&!client.world.getBlockState(hit.getBlockPos()).isAir();
+                if(valid&&now>=s.breakResumeAt){
+                    if(s.breakBurstAt==0)s.breakBurstAt=now;
+                    if(now-s.breakBurstAt<3_000_000_000L){s.breakingTarget=((BlockHitResult)client.crosshairTarget).getBlockPos().toImmutable();s.input=GroundNavigator.Input.NONE;s.metrics.count("native_break_attempts");s.movementNote="Holding native vanilla mining input; hardness/tool/progress unchanged";}
+                    else{s.breakingTarget=null;s.breakBurstAt=0;s.breakResumeAt=now+2_000_000_000L;s.routeLeg++;}
+                }else{s.breakingTarget=null;if(!valid)s.breakBurstAt=0;}
             }
+
             if(now-s.routeSuccessAt>1_000_000_000L){s.routeSuccessAt=now;if(s.routePosition!=null && s.routePosition.squaredDistanceTo(client.player.getPos())>.25)s.metrics.success("world_route_observation",now,s.dimension);s.routePosition=client.player.getPos();}
         } catch(Exception e){if(s.mode.startsWith("emi_")){s.error="incompatible EMI adapter: "+e;reply(s.run,s.phase,5,s.error);finish(client,false);}else stopWithReason(client,"controller failure: "+e,0);}
     }
@@ -255,6 +291,10 @@ public final class AdvancedClient {
         if(client.mouse instanceof org.marj4n.smooth_fix.mixin.client.BenchmarkMouseAccess mouse){mouse.smoothfix$setX(x);mouse.smoothfix$setY(y);}
     }
     private static final class Session {
+        int savedFpsLimit=-1;float observerYaw,observerPitch=27;
+        boolean actionRecorderStarted,recoveryInActionWindow;Map<String,Object> preparationReport=Map.of();
+        int requiredEntities,renderPeak,renderMin=Integer.MAX_VALUE;long renderFrames,renderCountSum,fullRenderFrames;boolean trackingFrame;
+        final it.unimi.dsi.fastutil.ints.IntSet renderOwnedIds=new it.unimi.dsi.fastutil.ints.IntOpenHashSet(512),renderedThisFrame=new it.unimi.dsi.fastutil.ints.IntOpenHashSet(512);
         final UUID run;final int phase;final String name,mode,dimension;final long createdAt=System.nanoTime();final int seconds;
         final ActionMetrics metrics=new ActionMetrics();final List<Map<String,Object>> observations=new ArrayList<>();
         final List<String> queries=new ArrayList<>();final List<Integer> entities=new ArrayList<>();
@@ -262,6 +302,7 @@ public final class AdvancedClient {
         long lootAt,lastLootAt;int lootSlot;net.minecraft.item.ItemStack lootBefore;final Set<Integer> blockedLoot=new HashSet<>();final List<Map<String,Object>> queryFailures=new ArrayList<>();
         double x,y,z;BlockPos container;Vec3d routePosition;net.minecraft.item.ItemStack swapBefore;long swapAt;boolean prepared,ready,recording,transferred;
         final GroundNavigator navigator=new GroundNavigator();
+        BlockPos breakingTarget;long breakBurstAt,breakResumeAt,routeStallAt;Vec3d routeStallPosition;
         GroundNavigator.Input input=GroundNavigator.Input.NONE;
         KeyBinding forward,back,left,right,jump,sneak,sprint,attack,use;
         int routeLeg=1,totalStages=21,optionalSearchSeconds;String nextStage="finished",movementNote="Preparing the world",progressState="";
@@ -270,9 +311,20 @@ public final class AdvancedClient {
         long readyAt,heartbeat,worldMissingAt,uiAt,observedAt,routeSuccessAt,preparationProgressAt=System.nanoTime();int step;
         Session(JsonObject data){seconds=data.has("seconds")?data.get("seconds").getAsInt():60;run=UUID.fromString(data.get("run").getAsString());phase=data.get("phase").getAsInt();name=data.get("stage").getAsString();mode=data.get("mode").getAsString();dimension=data.get("dimension").getAsString();for(JsonElement q:data.getAsJsonArray("queries"))queries.add(q.getAsString());update(data);}
         void bind(MinecraftClient client){if(client==null)return;var o=client.options;forward=o.forwardKey;back=o.backKey;left=o.leftKey;right=o.rightKey;jump=o.jumpKey;sneak=o.sneakKey;sprint=o.sprintKey;attack=o.attackKey;use=o.useKey;}
-        void update(JsonObject data){if(data.has("optionalSearchSeconds"))optionalSearchSeconds=data.get("optionalSearchSeconds").getAsInt();if(data.has("totalStages"))totalStages=data.get("totalStages").getAsInt();if(data.has("nextStage"))nextStage=data.get("nextStage").getAsString();if(data.has("structureSearch"))searchProgress=data.getAsJsonObject("structureSearch");if(data.has("prepared") && data.get("prepared").getAsBoolean()){prepared=true;preparationProgressAt=System.nanoTime();}if(data.has("searchingStructure") && data.get("searchingStructure").getAsBoolean()){preparationProgressAt=System.nanoTime();metrics.count("structure_search_progress_packets");if(data.has("structureSearch") && observations.size()<360)observations.add(Map.of("structureSearch",GSON.fromJson(data.get("structureSearch"),Map.class)));}x=data.get("x").getAsDouble();y=data.get("y").getAsDouble();z=data.get("z").getAsDouble();entities.clear();for(JsonElement id:data.getAsJsonArray("entities"))entities.add(id.getAsInt());if(data.has("container")){var p=data.getAsJsonObject("container");var updated=new BlockPos(p.get("x").getAsInt(),p.get("y").getAsInt(),p.get("z").getAsInt());if(!updated.equals(container)){container=updated;emptyRequested=false;transferred=false;lootAt=0;blockedLoot.clear();uiAt=System.nanoTime();}}}
+        void update(JsonObject data){if(data.has("targetCount"))requiredEntities=data.get("targetCount").getAsInt();if(data.has("observerYaw"))observerYaw=data.get("observerYaw").getAsFloat();if(data.has("observerPitch"))observerPitch=data.get("observerPitch").getAsFloat();if(data.has("optionalSearchSeconds"))optionalSearchSeconds=data.get("optionalSearchSeconds").getAsInt();if(data.has("totalStages"))totalStages=data.get("totalStages").getAsInt();if(data.has("nextStage"))nextStage=data.get("nextStage").getAsString();if(data.has("structureSearch"))searchProgress=data.getAsJsonObject("structureSearch");if(data.has("prepared") && data.get("prepared").getAsBoolean()){prepared=true;preparationProgressAt=System.nanoTime();}if(data.has("searchingStructure") && data.get("searchingStructure").getAsBoolean()){preparationProgressAt=System.nanoTime();metrics.count("structure_search_progress_packets");if(data.has("structureSearch") && observations.size()<360)observations.add(Map.of("structureSearch",GSON.fromJson(data.get("structureSearch"),Map.class)));}x=data.get("x").getAsDouble();y=data.get("y").getAsDouble();z=data.get("z").getAsDouble();entities.clear();renderOwnedIds.clear();for(JsonElement id:data.getAsJsonArray("entities")){entities.add(id.getAsInt());renderOwnedIds.add(id.getAsInt());}if(data.has("container")){var p=data.getAsJsonObject("container");var updated=new BlockPos(p.get("x").getAsInt(),p.get("y").getAsInt(),p.get("z").getAsInt());if(!updated.equals(container)){container=updated;emptyRequested=false;transferred=false;lootAt=0;blockedLoot.clear();uiAt=System.nanoTime();}}}
+        int nativeEntityReadyTicks;
+        boolean nativeEntitiesReady(MinecraftClient client){
+            if(!Set.of("entities","wither").contains(mode))return true;
+            boolean ready=requiredEntities>0 && entities.size()==requiredEntities;
+            for(int id:entities){Entity entity=client.world.getEntityById(id);if(entity==null||!entity.isAlive()||entity.isRemoved()||entity.isInvisible()||entity.age<40||entity instanceof net.minecraft.entity.mob.MobEntity mob&&mob.isAiDisabled()){ready=false;break;}}
+            nativeEntityReadyTicks=ready?nativeEntityReadyTicks+1:0;
+            // Wait for actual native packets and client spawn readiness before the action clock.
+            // Do not edit entity age/AI, culling, count or the >=90% completed-render assertion.
+            if(nativeEntityReadyTicks==20)metrics.count("native_all_target_client_readiness_settled");
+            return nativeEntityReadyTicks>=20;
+        }
         boolean ui(){return Set.of("inventory","emi_search","emi_recipe","chest","lootr").contains(mode);}
-        boolean validated(){return switch(mode){case "emi_search"->metrics.observed("emi_query_result_published") && metrics.observed("emi_query_first_render");case "emi_recipe"->metrics.observed("emi_recipe_first_render") && metrics.observed("emi_recipe_output_verified");case "inventory"->metrics.observed("inventory_open_first_render") && metrics.observed("inventory_swap_observed") && metrics.observed("native_item_tooltip_cpu_work");case "chest","lootr"->metrics.observed("container_first_open") || metrics.observed("container_repeat_open");case "combat"->metrics.attempted("native_attacks_sent") && metrics.observed("world_route_observation");case "break"->metrics.attempted("native_break_attempts");case "tnt"->metrics.attempted("tnt_observer_camera_ticks");default->AdvancedStageInfo.walking(mode)?navigator.distance()>=12 && navigator.extent()>=(Set.of("route","cold_route","nether","end").contains(mode)?8:6) && metrics.countValue("navigation_progress_samples")>=5:metrics.attempted("world_camera_ticks");};}
+        boolean validated(){return switch(mode){case "entities"->requiredEntities>0 && renderFrames>=20 && (double)fullRenderFrames/renderFrames>=.9 && metrics.attempted("world_camera_ticks");case "wither"->requiredEntities>0 && renderFrames>=20 && (double)fullRenderFrames/renderFrames>=.9 && metrics.attempted("native_wither_observer_camera_ticks");case "emi_search"->metrics.observed("emi_query_result_published") && metrics.observed("emi_query_first_render");case "emi_recipe"->metrics.observed("emi_recipe_first_render") && metrics.observed("emi_recipe_output_verified");case "inventory"->metrics.observed("inventory_open_first_render") && metrics.observed("inventory_swap_observed") && metrics.observed("native_item_tooltip_cpu_work");case "chest","lootr"->metrics.observed("container_first_open") || metrics.observed("container_repeat_open");case "combat"->metrics.attempted("native_attacks_sent") && metrics.observed("world_route_observation");case "break"->metrics.attempted("native_break_attempts");case "weather"->metrics.attempted("world_camera_ticks")&&metrics.attempted("native_rain_client_state_observed");case "tnt"->metrics.attempted("tnt_observer_camera_ticks");default->AdvancedStageInfo.walking(mode)?navigator.distance()>=12 && navigator.extent()>=(Set.of("route","cold_route","nether","end").contains(mode)?8:6) && metrics.countValue("navigation_progress_samples")>=5:metrics.attempted("world_camera_ticks");};}
         boolean owns(Screen screen){return screen!=null && ui() && (Set.of("chest","lootr").contains(mode)?screen instanceof HandledScreen<?> && !(screen instanceof InventoryScreen):screen instanceof InventoryScreen || mode.equals("emi_recipe") && screen.getClass().getName().equals("dev.emi.emi.screen.RecipeScreen"));}
     }
 }

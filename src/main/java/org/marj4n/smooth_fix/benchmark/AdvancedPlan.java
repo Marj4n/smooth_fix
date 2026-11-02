@@ -7,10 +7,14 @@ import java.util.*;
 
 /** Editable scenarios, with strict bounds. Unknown modes are rejected before moving a player. */
 public final class AdvancedPlan {
-    public static final Set<String> MODES=Set.of("panorama","route","cold_route","structure","inventory","emi_search","emi_recipe","chest","lootr","combat","effects","bloodmoon","wither","tnt","break","weather","teleport","nether","end","save");
+    public static final Set<String> MODES=Set.of("entities","panorama","route","cold_route","structure","inventory","emi_search","emi_recipe","chest","lootr","combat","effects","bloodmoon","wither","tnt","break","weather","teleport","nether","end","save");
     public static final class Stage {
         public String name,mode,target="";
         public int count,seconds=60;
+        /** Optional benchmark-only profile; 0 preserves current settings, 260 is the vanilla unlimited slider endpoint. */
+        public int fpsLimit=0;
+        /** Optional frozen natural-world anchor for independent copied-snapshot sessions. */
+        public Double centerX,centerZ;
         public Stage() { }
         public Stage(String name,String mode,String target,int count) {this.name=name;this.mode=mode;this.target=target;this.count=count;}
     }
@@ -45,7 +49,8 @@ public final class AdvancedPlan {
         if(plan.structureSearchRadiusStepBlocks<100 || plan.structureSearchRadiusStepBlocks>1000000)throw new IllegalArgumentException("Structure search radius step 100..1000000 blocks");
         if(plan.optionalModStructureSearchSeconds<10 || plan.optionalModStructureSearchSeconds>600)throw new IllegalArgumentException("Optional structure search 10..600 seconds");
         for(Stage stage:plan.stages)if(stage==null || stage.name==null || stage.name.length()>100 || !MODES.contains(stage.mode)
-                || stage.seconds<10 || stage.seconds>300 || stage.count<0 || stage.count>64 || stage.target==null || stage.target.length()>200
+                || (stage.fpsLimit!=0 && stage.fpsLimit!=60 && stage.fpsLimit!=260) || stage.seconds<10 || stage.seconds>300 || stage.count<0 || stage.count>(stage.mode.equals("entities")?300:64) || stage.target==null || stage.target.length()>200
+                || ((stage.centerX==null)!=(stage.centerZ==null)) || (stage.centerX!=null && (!Double.isFinite(stage.centerX) || !Double.isFinite(stage.centerZ) || Math.abs(stage.centerX)>29000000 || Math.abs(stage.centerZ)>29000000))
                 || ((stage.mode.equals("wither") || stage.target.equals("minecraft:wither")) && stage.count>10) || (stage.mode.equals("tnt") && stage.count>32))throw new IllegalArgumentException("Invalid advanced stage");
         if(plan.emiQueries==null || plan.emiQueries.isEmpty() || plan.emiQueries.size()>32 || plan.emiQueries.stream().anyMatch(q->q==null || q.length()>128))throw new IllegalArgumentException("1..32 EMI queries, maximum 128 characters");
         return plan;

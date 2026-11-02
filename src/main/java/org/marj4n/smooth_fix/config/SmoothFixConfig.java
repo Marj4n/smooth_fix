@@ -15,8 +15,8 @@ import java.nio.file.Path;
 /**
  * Small early-load config used by the mixin plugin.
  *
- * The config intentionally contains only patch toggles. Every fix defaults to enabled,
- * but can be disabled independently if an upstream mod eventually fixes the problem.
+ * Accepted fixes default to enabled; experimental R2 adapters remain opt-in until
+ * fullpack correctness and performance acceptance. Patches can be disabled independently.
  */
 public final class SmoothFixConfig {
     private static final Gson GSON = new GsonBuilder()
@@ -37,6 +37,36 @@ public final class SmoothFixConfig {
     public boolean dedicatedServerClientMixinGuard = true;
     public boolean invalidEntityRotationGuard = true;
     public boolean diagnostics = true;
+    /** Own diagnostic JSON only; never applies to Minecraft saves/network/chunk jobs. */
+    public boolean backgroundReportIo = true;
+    /** Experimental, opt-in frame-pressure deferral of noncritical diagnostic writes. */
+    public boolean adaptiveReportScheduling = false;
+    public int reportQueueCapacity = 4;
+    public int reportQueueMiB = 32;
+    public int reportMaximumDeferralMillis = 250;
+    public boolean hideInventoryAttributesButton = true;
+    public boolean hideRedundantAccessoryButtons = true;
+    public boolean accessoriesLegacyRecoveryFix = true;
+
+    /** R2 major gates; experimental particle work remains off until differential/runtime approval. */
+    public boolean entityOptimization = true;
+    public boolean particleOptimization = false;
+    public boolean chunkEfficiency = true;
+    public boolean memoryOptimization = true;
+    public boolean profilingTelemetry = true;
+    /** Benchmark-only stack sampling; frame/tick counters remain available when disabled. */
+    public boolean benchmarkStackSampling = true;
+    /** Experimental: noise math parity passed; complete saved-world parity is unresolved. */
+    public boolean betterCavesNoiseAllocationFix = false;
+    /** Experimental audited Smooth Bridge/Kilt 1.0.0 adapter; fullpack gain not accepted. */
+    public boolean kiltRenderContextAllocationFix = false;
+    /** Experimental bounded serialization cache; full reload/lifecycle coverage is incomplete. */
+    public boolean immutableModelVariantCache = false;
+    /** Experimental: closes fully consumed recipe streams in audited Sortilege 9.0 only. */
+    public boolean sortilegeReloadStreamClosureFix = false;
+    /** Experimental missing Forge-side ModernFix cache bridge under audited Kilt; OFF pending lifecycle validation. */
+    public boolean kiltModernFixRegistryCacheBridge = false;
+
     public boolean modelRotationAllocationFix = true;
     public boolean bewitchmentSigilSearchFix = true;
     public boolean saintsDragonEntityScanFix = true;

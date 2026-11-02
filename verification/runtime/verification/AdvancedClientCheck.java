@@ -88,15 +88,15 @@ public final class AdvancedClientCheck {
         Object other=Proxy.newProxyInstance(recipe.getClassLoader(),new Class<?>[]{recipe},(p,m,a)->null);
         EmiBenchmarkAdapter adapter=(EmiBenchmarkAdapter)allocate(EmiBenchmarkAdapter.class);field(EmiBenchmarkAdapter.class,"recipe").set(adapter,recipe);field(EmiBenchmarkAdapter.class,"expectedRecipe").set(adapter,requested);field(EmiBenchmarkAdapter.class,"expectedOutputs").set(adapter,List.of(output));
         Object view=allocate(screen),page=group.getConstructor(recipe,int.class,int.class,int.class,int.class).newInstance(requested,0,0,100,100);
-        field(screen,"currentPage").set(view,List.of(page));List<Object> widgets=(List<Object>)group.getField("widgets").get(page);widgets.clear();
+        field(screen,"currentPage").set(view,List.of(page));List<?> widgets=(List<?>)group.getField("widgets").get(page);widgets.clear();
         Object wrong=stack.getMethod("of",net.minecraft.item.ItemStack.class).invoke(null,new net.minecraft.item.ItemStack(net.minecraft.item.Items.APPLE));
-        Object wrongSlot=slot.getConstructor(ingredient,int.class,int.class).newInstance(wrong,0,0);slot.getMethod("recipeContext",recipe).invoke(wrongSlot,requested);widgets.add(wrongSlot);
+        Object wrongSlot=slot.getConstructor(ingredient,int.class,int.class).newInstance(wrong,0,0);slot.getMethod("recipeContext",recipe).invoke(wrongSlot,requested);VerificationReflection.addToList(widgets,wrongSlot);
         if(adapter.renderedRecipe(view)!=null)throw new AssertionError("wrong recipe output accepted");
-        Object correct=slot.getConstructor(ingredient,int.class,int.class).newInstance(output,0,0);widgets.clear();widgets.add(correct);
+        Object correct=slot.getConstructor(ingredient,int.class,int.class).newInstance(output,0,0);widgets.clear();VerificationReflection.addToList(widgets,correct);
         if(adapter.renderedRecipe(view)!=null)throw new AssertionError("input-only slot accepted as recipe result");
         slot.getMethod("recipeContext",recipe).invoke(correct,requested);
         if(adapter.renderedRecipe(view)==null)throw new AssertionError("matching recipe and result rejected");
-        Object wrongPage=group.getConstructor(recipe,int.class,int.class,int.class,int.class).newInstance(other,0,0,100,100);((List<Object>)group.getField("widgets").get(wrongPage)).add(correct);field(screen,"currentPage").set(view,List.of(wrongPage));
+        Object wrongPage=group.getConstructor(recipe,int.class,int.class,int.class,int.class).newInstance(other,0,0,100,100);VerificationReflection.addToList(group.getField("widgets").get(wrongPage),correct);field(screen,"currentPage").set(view,List.of(wrongPage));
         if(adapter.renderedRecipe(view)!=null)throw new AssertionError("stale recipe page accepted");
         System.out.println("SMOOTHFIX_VERIFY_PASS actual EMI RecipeScreen/WidgetGroup/SlotWidget objects reject wrong output, input-only slot and stale recipe; accept matching recipe/output; no graphical render claimed");
     }

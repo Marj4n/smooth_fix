@@ -70,7 +70,7 @@ public final class RelevantDragonEntities {
         });
     }
 
-    private static void clear() {
+    public static void clear() {
         indexedWorld = null;
         dragons.clear();
         typedDragons.clear();

@@ -22,9 +22,9 @@ public final class ContinuationCheck {
         UUID owner=player.getUuid();String inventory=player.getInventory().writeNbt(new NbtList()).toString();Vec3d original=player.getPos();
         AdvancedPlan plan=new AdvancedPlan();plan.automaticallySelectedModStructures=0;plan.stages=new ArrayList<>(List.of(new AdvancedPlan.Stage("route","route","",0),new AdvancedPlan.Stage("save","save","",0)));plan.stages.forEach(s->s.seconds=10);
         Files.writeString(net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir().resolve("smooth_fix/advanced_benchmark.json"),new com.google.gson.Gson().toJson(plan));
-        server.getCommandManager().executeWithPrefix(player.getCommandSource().withLevel(4),"smoothfix stress advanced start world-copy");Object r=run(AdvancedBenchmark.class);if(r==null)throw new AssertionError("rescue run missing");ready(AdvancedBenchmark.class,r,player);
+        VerificationReflection.advertiseBaseline(player);server.getCommandManager().executeWithPrefix(player.getCommandSource().withLevel(4),"smoothfix stress advanced start world-copy");VerificationReflection.finishFixturePreflight(player);Object r=run(AdvancedBenchmark.class);if(r==null)throw new AssertionError("rescue run missing");ready(AdvancedBenchmark.class,r,player);
         Vec3d safe=(Vec3d)field(r.getClass(),"safePosition").get(r);player.setPosition(safe.x,safe.y-9,safe.z);player.setVelocity(0,-1,0);tick(r);
-        var result=((List<Map<String,Object>>)field(r.getClass(),"results").get(r)).get(0);
+        var result=(VerificationReflection.maps(field(r.getClass(),"results").get(r))).get(0);
         if(run(AdvancedBenchmark.class)!=r || !result.containsKey("fallRescues") || player.getY()!=safe.y)throw new AssertionError("fall rescue aborted / failed");
         ready(AdvancedBenchmark.class,r,player);player.getInventory().setStack(5,new ItemStack(Items.EMERALD,9));player.getInventory().selectedSlot=5;tick(r);String stageInventory=player.getInventory().writeNbt(new NbtList()).toString();
         player.damage(player.getWorld().getDamageSources().outOfWorld(),10000);if(player.isAlive())throw new AssertionError("native death did not occur");tick(r);player=server.getPlayerManager().getPlayer(owner);
@@ -36,7 +36,7 @@ public final class ContinuationCheck {
         if(!inventory.equals(player.getInventory().writeNbt(new NbtList()).toString()) || player.getPos().squaredDistanceTo(original)>.001 || !Boolean.TRUE.equals(BenchmarkRecovery.lastVerification(owner).get("all")))throw new AssertionError("original journal recovery failed after respawn");
         System.out.println("SMOOTHFIX_VERIFY_PASS native void-fall rescue and actual out-of-world player death respawn continue same advanced run; inventory/hotbar retained, recovered death cannot PASS, next stage and original journal restoration succeed");
         Object addon=Class.forName("net.fabricmc.fabric.impl.networking.server.ServerNetworkingImpl").getMethod("getAddon",net.minecraft.server.network.ServerPlayNetworkHandler.class).invoke(null,player.networkHandler);
-        ((Set<net.minecraft.util.Identifier>)field(addon.getClass().getSuperclass(),"sendableChannels").get(addon)).add(BenchmarkProtocol.CONTROL);
+        VerificationReflection.addToSet(field(addon.getClass().getSuperclass(),"sendableChannels").get(addon),BenchmarkProtocol.CONTROL);
         server.getCommandManager().executeWithPrefix(player.getCommandSource().withLevel(4),"smoothfix stress wither 1");r=run(ServerBenchmark.class);if(r==null)throw new AssertionError("legacy continuation run missing");ready(ServerBenchmark.class,r,player);field(r.getClass(),"readyAt").setLong(r,System.nanoTime()-11_000_000_000L);tick(r);
         if(!field(r.getClass(),"measuring").getBoolean(r))throw new AssertionError("legacy measuring not started");
         player.damage(player.getWorld().getDamageSources().outOfWorld(),10000);tick(r);player=server.getPlayerManager().getPlayer(owner);
