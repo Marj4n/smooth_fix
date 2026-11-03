@@ -4,7 +4,7 @@ import java.util.*;
 
 /** Run completion and workload success are separate. Missing reports never count as passes. */
 public final class BenchmarkOutcome {
-    private BenchmarkOutcome() { }
+    private BenchmarkOutcome() {}
 
     public static String status(List<? extends Map<String, Object>> stages) {
         Map<String, Integer> counts = counts(stages);
@@ -19,9 +19,16 @@ public final class BenchmarkOutcome {
         for (String key : List.of("passed", "failed", "skipped", "pending")) counts.put(key, 0);
         for (Map<String, Object> stage : stages) {
             String status = String.valueOf(stage.getOrDefault("status", "pending"));
-            String kind = status.startsWith("skipped") ? "skipped" :
-                    status.equals("passed") || status.equals("complete") ? "passed" :
-                    status.equals("measured") || status.contains("pending") || status.equals("running") ? "pending" : "failed";
+            String kind =
+                    status.startsWith("skipped")
+                            ? "skipped"
+                            : status.equals("passed") || status.equals("complete")
+                                    ? "passed"
+                                    : status.equals("measured")
+                                                    || status.contains("pending")
+                                                    || status.equals("running")
+                                            ? "pending"
+                                            : "failed";
             counts.merge(kind, 1, Integer::sum);
         }
         counts.put("total", stages.size());

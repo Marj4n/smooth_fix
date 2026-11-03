@@ -5,4 +5,4 @@ import org.spongepowered.asm.mixin.Mixin;
 
 /** Run after Better Mob Combat's default-priority equipment injection. */
 @Mixin(value = MobEntity.class, priority = 900)
-public abstract class MobEquipmentMarkerMixin { }
+public abstract class MobEquipmentMarkerMixin {}

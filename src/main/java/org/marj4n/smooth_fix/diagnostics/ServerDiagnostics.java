@@ -23,39 +23,80 @@ public final class ServerDiagnostics {
     private static volatile boolean inTick;
     // Live JVM threads remain strongly rooted by the VM. A weak observer avoids
     // retaining a stopped thread's task closure and its entire integrated server.
-    private static volatile java.lang.ref.WeakReference<Thread> serverThread = new java.lang.ref.WeakReference<>(null);
+    private static volatile java.lang.ref.WeakReference<Thread> serverThread =
+            new java.lang.ref.WeakReference<>(null);
     private static volatile Profile activeProfile;
 
-    private ServerDiagnostics() { }
+    private ServerDiagnostics() {}
 
     public static void install() {
         ServerLifecycleEvents.SERVER_STARTING.register(server -> reset());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> stopProfile());
-        ServerTickEvents.START_SERVER_TICK.register(server -> {
-            Thread current = Thread.currentThread();
-            if (serverThread.get() != current) serverThread = new java.lang.ref.WeakReference<>(current);
-            tickStart = System.nanoTime();
-            inTick = true;
-            Profile profile = activeProfile;
-            if (profile != null) profile.cadence.beginTick(tickStart);
-        });
-        ServerTickEvents.END_SERVER_TICK.register(server -> {
-            long elapsed = System.nanoTime() - tickStart;
-            inTick = false;
-            recordTick(elapsed);
-        });
-        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> dispatcher.register(
-                CommandManager.literal("smoothfix").requires(source -> source.hasPermissionLevel(2))
-                        .then(CommandManager.literal("report").executes(context -> writeReport(context.getSource())))
-                        .then(CommandManager.literal("profile")
-                                .executes(context -> beginProfile(context.getSource(), 120))
-                                .then(CommandManager.argument("seconds", IntegerArgumentType.integer(10, 120))
-                                        .executes(context -> beginProfile(context.getSource(), IntegerArgumentType.getInteger(context, "seconds")))))
-                        .then(CommandManager.literal("stopprofile").executes(context -> {
-                            stopProfile();
-                            context.getSource().sendFeedback(() -> Text.literal("Smooth Fix profile will be saved; check server log for its path."), false);
-                            return 1;
-                        }))));
+        ServerTickEvents.START_SERVER_TICK.register(
+                server -> {
+                    Thread current = Thread.currentThread();
+                    if (serverThread.get() != current)
+                        serverThread = new java.lang.ref.WeakReference<>(current);
+                    tickStart = System.nanoTime();
+                    inTick = true;
+                    Profile profile = activeProfile;
+                    if (profile != null) profile.cadence.beginTick(tickStart);
+                });
+        ServerTickEvents.END_SERVER_TICK.register(
+                server -> {
+                    long elapsed = System.nanoTime() - tickStart;
+                    inTick = false;
+                    recordTick(elapsed);
+                });
+        CommandRegistrationCallback.EVENT.register(
+                (dispatcher, registryAccess, environment) ->
+                        dispatcher.register(
+                                CommandManager.literal("smoothfix")
+                                        .requires(source -> source.hasPermissionLevel(2))
+                                        .then(
+                                                CommandManager.literal("report")
+                                                        .executes(
+                                                                context ->
+                                                                        writeReport(
+                                                                                context
+                                                                                        .getSource())))
+                                        .then(
+                                                CommandManager.literal("profile")
+                                                        .executes(
+                                                                context ->
+                                                                        beginProfile(
+                                                                                context.getSource(),
+                                                                                120))
+                                                        .then(
+                                                                CommandManager.argument(
+                                                                                "seconds",
+                                                                                IntegerArgumentType
+                                                                                        .integer(
+                                                                                                10,
+                                                                                                120))
+                                                                        .executes(
+                                                                                context ->
+                                                                                        beginProfile(
+                                                                                                context
+                                                                                                        .getSource(),
+                                                                                                IntegerArgumentType
+                                                                                                        .getInteger(
+                                                                                                                context,
+                                                                                                                "seconds")))))
+                                        .then(
+                                                CommandManager.literal("stopprofile")
+                                                        .executes(
+                                                                context -> {
+                                                                    stopProfile();
+                                                                    context.getSource()
+                                                                            .sendFeedback(
+                                                                                    () ->
+                                                                                            Text
+                                                                                                    .literal(
+                                                                                                            "Smooth Fix profile will be saved; check server log for its path."),
+                                                                                    false);
+                                                                    return 1;
+                                                                }))));
     }
 
     private static int writeReport(ServerCommandSource source) {
@@ -82,8 +123,13 @@ public final class ServerDiagnostics {
             worker.setDaemon(true);
             worker.start();
         }
-        source.sendFeedback(() -> Text.literal("Smooth Fix recording slow-tick stacks for " + seconds
-                + " seconds. Play until lag appears; report path will be logged automatically."), false);
+        source.sendFeedback(
+                () ->
+                        Text.literal(
+                                "Smooth Fix recording slow-tick stacks for "
+                                        + seconds
+                                        + " seconds. Play until lag appears; report path will be logged automatically."),
+                false);
         return 1;
     }
 
@@ -125,27 +171,44 @@ public final class ServerDiagnostics {
         Map<String, Object> timings = new LinkedHashMap<>();
         timings.put("samples", tickCount);
         timings.put("meanMs", tickCount == 0 ? 0 : sum / tickCount);
-        timings.put("p95Ms", tickCount == 0 ? 0 : sorted[(int) Math.ceil(tickCount * 0.95) - 1] / 1_000_000.0);
+        timings.put(
+                "p95Ms",
+                tickCount == 0 ? 0 : sorted[(int) Math.ceil(tickCount * 0.95) - 1] / 1_000_000.0);
         timings.put("maxMs", tickCount == 0 ? 0 : sorted[tickCount - 1] / 1_000_000.0);
         timings.put("ticksOver100Ms", slow);
         timings.put("ticksOver50Ms", overBudget);
-        timings.put("measurement", "Interval between this mod's Fabric START/END tick callbacks; excludes sleep between ticks.");
+        timings.put(
+                "measurement",
+                "Interval between this mod's Fabric START/END tick callbacks; excludes sleep between ticks.");
         report.put("recentTickTimings", timings);
         report.put("invalidRotations", InvalidRotationTracker.snapshot());
         return report;
     }
 
-    public static synchronized boolean isProfiling() { return activeProfile != null; }
+    public static synchronized boolean isProfiling() {
+        return activeProfile != null;
+    }
+
     public static synchronized boolean startRecording() {
         if (activeProfile != null) return false;
-        Profile p = new Profile(0, false); activeProfile = p;
-        if(org.marj4n.smooth_fix.config.SmoothFixConfig.get().benchmarkStackSampling){Thread t = new Thread(p, "Smooth Fix Benchmark Sampler");t.setDaemon(true);t.start();}return true;
+        Profile p = new Profile(0, false);
+        activeProfile = p;
+        if (org.marj4n.smooth_fix.config.SmoothFixConfig.get().benchmarkStackSampling) {
+            Thread t = new Thread(p, "Smooth Fix Benchmark Sampler");
+            t.setDaemon(true);
+            t.start();
+        }
+        return true;
     }
-    public static synchronized Map<String,Object> finishRecording() {
+
+    public static synchronized Map<String, Object> finishRecording() {
         Profile p = activeProfile;
         if (p == null) return Map.of("error", "no active recording");
-        p.stop = true; activeProfile = null; return p.report();
+        p.stop = true;
+        activeProfile = null;
+        return p.report();
     }
+
     private static final class Profile implements Runnable {
         private final int seconds;
         private final boolean autoSave;
@@ -154,40 +217,67 @@ public final class ServerDiagnostics {
         private final TickCadence cadence = new TickCadence();
         private final StackSamples boundaryStacks = new StackSamples();
         private volatile boolean stop;
-        private final Map<String,Object> memoryAtStart = MemoryReport.snapshot("server");
+        private final Map<String, Object> memoryAtStart = MemoryReport.snapshot("server");
         private final long started = System.nanoTime();
-        private Profile(int seconds, boolean autoSave) { this.seconds=seconds; this.autoSave=autoSave; }
-        private Map<String,Object> report() {
-            Map<String,Object> report = snapshot();
+
+        private Profile(int seconds, boolean autoSave) {
+            this.seconds = seconds;
+            this.autoSave = autoSave;
+        }
+
+        private Map<String, Object> report() {
+            Map<String, Object> report = snapshot();
             report.put("memoryAtStart", memoryAtStart);
             MemoryReport.addCollectorDeltas(report, memoryAtStart);
-            report.put("elapsedSeconds", (System.nanoTime()-started)/1_000_000_000.0);
+            report.put("elapsedSeconds", (System.nanoTime() - started) / 1_000_000_000.0);
             report.put("profileTickTimings", timings.snapshot());
             report.put("tickStartIntervals", cadence.snapshot());
-            report.put("sampler", Map.of("requestedSeconds",seconds,"intervalMs",10,"tickThresholdMs",50));
+            report.put(
+                    "sampler",
+                    Map.of("requestedSeconds", seconds, "intervalMs", 10, "tickThresholdMs", 50));
             report.put("slowTickStacks", stacks.snapshot());
             report.put("delayedTickBoundaryStacks", boundaryStacks.snapshot());
-            report.put("measurementNote", "profileTickTimings measures only this mod's Fabric START/END callbacks and can miss pauses outside them. tickStartIntervals measures wall-clock cadence including normal sleep. Boundary stacks sample a runnable server thread more than 100ms after its last tick start, outside callbacks; scheduled waits are excluded. GC deltas are collector counters, not exact pause attribution. Sampling adds overhead.");
+            report.put(
+                    "measurementNote",
+                    "profileTickTimings measures only this mod's Fabric START/END callbacks and can miss pauses outside them. tickStartIntervals measures wall-clock cadence including normal sleep. Boundary stacks sample a runnable server thread more than 100ms after its last tick start, outside callbacks; scheduled waits are excluded. GC deltas are collector counters, not exact pause attribution. Sampling adds overhead.");
             return report;
         }
-        @Override public void run() {
-            long deadline = seconds == 0 ? Long.MAX_VALUE : started + seconds*1_000_000_000L;
+
+        @Override
+        public void run() {
+            long deadline = seconds == 0 ? Long.MAX_VALUE : started + seconds * 1_000_000_000L;
             try {
-                while (!stop && System.nanoTime()<deadline) {
-                    Thread target=serverThread.get(); long start=tickStart;
-                    if(target!=null && inTick && System.nanoTime()-start>50_000_000L) {
-                        StackTraceElement[] trace=target.getStackTrace();
-                        if(!stop && inTick && tickStart==start) stacks.add(trace);
-                    } else if(target!=null && !inTick && start!=0 && System.nanoTime()-start>100_000_000L
-                            && target.getState()==Thread.State.RUNNABLE) {
-                        StackTraceElement[] trace=target.getStackTrace();
-                        if(!stop && !inTick && tickStart==start && target.getState()==Thread.State.RUNNABLE) boundaryStacks.add(trace);
+                while (!stop && System.nanoTime() < deadline) {
+                    Thread target = serverThread.get();
+                    long start = tickStart;
+                    if (target != null && inTick && System.nanoTime() - start > 50_000_000L) {
+                        StackTraceElement[] trace = target.getStackTrace();
+                        if (!stop && inTick && tickStart == start) stacks.add(trace);
+                    } else if (target != null
+                            && !inTick
+                            && start != 0
+                            && System.nanoTime() - start > 100_000_000L
+                            && target.getState() == Thread.State.RUNNABLE) {
+                        StackTraceElement[] trace = target.getStackTrace();
+                        if (!stop
+                                && !inTick
+                                && tickStart == start
+                                && target.getState() == Thread.State.RUNNABLE)
+                            boundaryStacks.add(trace);
                     }
                     LockSupport.parkNanos(10_000_000L);
                 }
-                if(autoSave) SmoothFix.LOGGER.info("Smooth Fix lag profile saved: {}",MemoryReport.write("server_profile",report()));
-            } catch(Exception e) { SmoothFix.LOGGER.error("Could not finish Smooth Fix lag profile",e); }
-            finally { synchronized(ServerDiagnostics.class) { if(activeProfile==this) activeProfile=null; } }
+                if (autoSave)
+                    SmoothFix.LOGGER.info(
+                            "Smooth Fix lag profile saved: {}",
+                            MemoryReport.write("server_profile", report()));
+            } catch (Exception e) {
+                SmoothFix.LOGGER.error("Could not finish Smooth Fix lag profile", e);
+            } finally {
+                synchronized (ServerDiagnostics.class) {
+                    if (activeProfile == this) activeProfile = null;
+                }
+            }
         }
     }
 }

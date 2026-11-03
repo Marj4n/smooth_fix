@@ -5,14 +5,20 @@ import java.util.function.ToDoubleFunction;
 
 /** Incremental, bounded A* over standing positions; no world generation or teleporting. */
 public final class GroundRoutePlanner {
-    public record Point(int x, double y, int z) { }
-    public interface Terrain { Point step(Point from, int dx, int dz); }
-    private record Entry(Point point, double cost, double score) { }
+    public record Point(int x, double y, int z) {}
+
+    public interface Terrain {
+        Point step(Point from, int dx, int dz);
+    }
+
+    private record Entry(Point point, double cost, double score) {}
+
     public static final class Search {
         private final Terrain terrain;
         private final Point start;
         private final double targetX, targetZ;
-        private final PriorityQueue<Entry> open = new PriorityQueue<>(Comparator.comparingDouble(Entry::score));
+        private final PriorityQueue<Entry> open =
+                new PriorityQueue<>(Comparator.comparingDouble(Entry::score));
         private final Map<Point, Double> costs = new HashMap<>();
         private final Map<Point, Point> parents = new HashMap<>();
         private final Set<Point> closed = new HashSet<>();
@@ -20,56 +26,95 @@ public final class GroundRoutePlanner {
         private boolean done;
         private final boolean roam;
         private final ToDoubleFunction<Point> frontierScore;
+
         public Search(Terrain terrain, Point start, double targetX, double targetZ) {
-            this(terrain,start,targetX,targetZ,false);
+            this(terrain, start, targetX, targetZ, false);
         }
-        public Search(Terrain terrain, Point start, double targetX, double targetZ,boolean roam) {
+
+        public Search(Terrain terrain, Point start, double targetX, double targetZ, boolean roam) {
             this(terrain, start, targetX, targetZ, roam, point -> 0);
         }
-        public Search(Terrain terrain, Point start, double targetX, double targetZ, boolean roam, ToDoubleFunction<Point> frontierScore) {
-            this.roam=roam;
+
+        public Search(
+                Terrain terrain,
+                Point start,
+                double targetX,
+                double targetZ,
+                boolean roam,
+                ToDoubleFunction<Point> frontierScore) {
+            this.roam = roam;
             this.frontierScore = frontierScore;
-            this.terrain = terrain; this.start = best = start; this.targetX = targetX; this.targetZ = targetZ;
-            costs.put(start, 0.0); open.add(new Entry(start, 0, heuristic(start)));
+            this.terrain = terrain;
+            this.start = best = start;
+            this.targetX = targetX;
+            this.targetZ = targetZ;
+            costs.put(start, 0.0);
+            open.add(new Entry(start, 0, heuristic(start)));
         }
-        private double heuristic(Point point) { return Math.hypot(point.x + .5 - targetX, point.z + .5 - targetZ); }
+
+        private double heuristic(Point point) {
+            return Math.hypot(point.x + .5 - targetX, point.z + .5 - targetZ);
+        }
+
         private double roamScore(Point p) {
-            double distance=Math.hypot(p.x-start.x,p.z-start.z);
-            if(distance>9)return Double.NEGATIVE_INFINITY;
-            return distance + frontierScore.applyAsDouble(p) + .2*((p.x-start.x)*(targetX-start.x)+(p.z-start.z)*(targetZ-start.z))/Math.max(1,Math.hypot(targetX-start.x,targetZ-start.z));
+            double distance = Math.hypot(p.x - start.x, p.z - start.z);
+            if (distance > 9) return Double.NEGATIVE_INFINITY;
+            return distance
+                    + frontierScore.applyAsDouble(p)
+                    + .2
+                            * ((p.x - start.x) * (targetX - start.x)
+                                    + (p.z - start.z) * (targetZ - start.z))
+                            / Math.max(1, Math.hypot(targetX - start.x, targetZ - start.z));
         }
+
         public boolean advance(int maximumNodes, long budgetNanos) {
             long deadline = System.nanoTime() + budgetNanos;
             for (int i = 0; !done && i < maximumNodes && System.nanoTime() < deadline; i++) {
                 Entry entry = open.poll();
-                if (entry == null || closed.size() >= 256) { done = true; break; }
+                if (entry == null || closed.size() >= 256) {
+                    done = true;
+                    break;
+                }
                 Point from = entry.point;
                 if (!closed.add(from)) continue;
-                if (roam?roamScore(from)>roamScore(best):heuristic(from)<heuristic(best)) best = from;
-                if (!roam && heuristic(from) < .65) { best = from; done = true; break; }
+                if (roam ? roamScore(from) > roamScore(best) : heuristic(from) < heuristic(best))
+                    best = from;
+                if (!roam && heuristic(from) < .65) {
+                    best = from;
+                    done = true;
+                    break;
+                }
                 for (int direction = 0; direction < 4; direction++) {
                     int dx = direction == 0 ? 1 : direction == 1 ? -1 : 0;
                     int dz = direction == 2 ? 1 : direction == 3 ? -1 : 0;
-                    if (Math.abs(from.x + dx - start.x) > 12 || Math.abs(from.z + dz - start.z) > 12) continue;
+                    if (Math.abs(from.x + dx - start.x) > 12
+                            || Math.abs(from.z + dz - start.z) > 12) continue;
                     Point next = terrain.step(from, dx, dz);
                     if (next == null || closed.contains(next)) continue;
                     double cost = entry.cost + 1 + Math.abs(next.y - from.y) * .35;
                     if (cost >= costs.getOrDefault(next, Double.POSITIVE_INFINITY)) continue;
-                    costs.put(next, cost); parents.put(next, from);
+                    costs.put(next, cost);
+                    parents.put(next, from);
                     open.add(new Entry(next, cost, cost + heuristic(next)));
                 }
             }
             return done;
         }
+
         public List<Point> path() {
             List<Point> path = new ArrayList<>();
             for (Point at = best; !at.equals(start); at = parents.get(at)) {
                 if (at == null) return List.of();
                 path.add(at);
             }
-            Collections.reverse(path); return path;
+            Collections.reverse(path);
+            return path;
         }
-        public int visited() { return closed.size(); }
+
+        public int visited() {
+            return closed.size();
+        }
     }
-    private GroundRoutePlanner() { }
+
+    private GroundRoutePlanner() {}
 }

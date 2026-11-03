@@ -13,7 +13,8 @@ public final class BenchmarkClientReport {
     private final Map<String, Object> report = new LinkedHashMap<>();
     private final SortedMap<Integer, Map<String, Object>> stages = new TreeMap<>();
 
-    public BenchmarkClientReport(UUID run, Path directory, String suite, String build) throws IOException {
+    public BenchmarkClientReport(UUID run, Path directory, String suite, String build)
+            throws IOException {
         this.run = run;
         file = directory.resolve("benchmark_client_" + run + ".json");
         report.put("schemaVersion", 3);
@@ -26,9 +27,17 @@ public final class BenchmarkClientReport {
         checkpoint(true);
     }
 
-    public boolean belongsTo(UUID id) { return run.equals(id); }
-    public String path() { return file.toAbsolutePath().toString(); }
-    public boolean isFinished() { return report.containsKey("finishedUtc"); }
+    public boolean belongsTo(UUID id) {
+        return run.equals(id);
+    }
+
+    public String path() {
+        return file.toAbsolutePath().toString();
+    }
+
+    public boolean isFinished() {
+        return report.containsKey("finishedUtc");
+    }
 
     public void stage(int phase, Map<String, Object> stage) throws IOException {
         stages.put(phase, new LinkedHashMap<>(stage));
@@ -37,25 +46,46 @@ public final class BenchmarkClientReport {
 
     public void finish(String reason) throws IOException {
         report.put("terminationReason", reason);
-        report.put("status", reason.equals("completed") ? BenchmarkOutcome.status(new ArrayList<>(stages.values())) : reason);
+        report.put(
+                "status",
+                reason.equals("completed")
+                        ? BenchmarkOutcome.status(new ArrayList<>(stages.values()))
+                        : reason);
         report.put("finishedUtc", java.time.Instant.now().toString());
         report.put("summary", BenchmarkOutcome.counts(new ArrayList<>(stages.values())));
         checkpoint(true);
     }
 
-    public void serverResult(Map<String,Object> server) throws IOException {
-        report.put("serverStatus",server.get("status"));report.put("serverSummary",server.get("serverSummary"));
-        if(server.get("serverStageOutcomes") instanceof List<?> outcomes)for(Object entry:outcomes)if(entry instanceof Map<?,?> outcome && outcome.get("phase") instanceof Number phase){Map<String,Object> stage=stages.get(phase.intValue());if(stage!=null){stage.putIfAbsent("clientStatus",stage.get("status"));for(String key:List.of("status","serverWorkloadValidation","actionWindowSeconds"))if(outcome.containsKey(key))stage.put(key,outcome.get(key));}}
+    public void serverResult(Map<String, Object> server) throws IOException {
+        report.put("serverStatus", server.get("status"));
+        report.put("serverSummary", server.get("serverSummary"));
+        if (server.get("serverStageOutcomes") instanceof List<?> outcomes)
+            for (Object entry : outcomes)
+                if (entry instanceof Map<?, ?> outcome
+                        && outcome.get("phase") instanceof Number phase) {
+                    Map<String, Object> stage = stages.get(phase.intValue());
+                    if (stage != null) {
+                        stage.putIfAbsent("clientStatus", stage.get("status"));
+                        for (String key :
+                                List.of(
+                                        "status",
+                                        "serverWorkloadValidation",
+                                        "actionWindowSeconds"))
+                            if (outcome.containsKey(key)) stage.put(key, outcome.get(key));
+                    }
+                }
         finish(String.valueOf(server.get("status")));
     }
+
     public void recovery(Map<String, Object> recovery) throws IOException {
         report.put("clientRecoveryVerification", recovery);
         checkpoint(true);
     }
 
     private void checkpoint(boolean durable) throws IOException {
-        report.put("stages",new ArrayList<>(stages.values()));
-        report.put("diagnosticIoAtCheckpoint",org.marj4n.smooth_fix.performance.ReportIo.metrics());
-        org.marj4n.smooth_fix.performance.ReportIo.checkpoint(file,report,durable);
+        report.put("stages", new ArrayList<>(stages.values()));
+        report.put(
+                "diagnosticIoAtCheckpoint", org.marj4n.smooth_fix.performance.ReportIo.metrics());
+        org.marj4n.smooth_fix.performance.ReportIo.checkpoint(file, report, durable);
     }
 }

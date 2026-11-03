@@ -1,3 +1,0 @@
-STATIC INSPECTION ONLY: see VALIDATION_ADVANCED8_LAPTOP.json.
-No Java/Gradle build, game runtime, FPS test or PowerShell execution was performed.
-Previous results are stored under historical_validation/advanced7 and do not validate this revision.

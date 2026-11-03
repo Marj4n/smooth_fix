@@ -1,6 +1,6 @@
 # Gradle
 .gradle/
-build/
+/build/
 out/
 
 # IntelliJ IDEA
@@ -53,3 +53,11 @@ desktop.ini
 
 # Keep Gradle Wrapper JAR
 !gradle/wrapper/gradle-wrapper.jar
+/.gradle/
+/.idea/
+/out/
+/run/
+/runs/
+/common/build/
+/fabric/build/
+/forge/build/

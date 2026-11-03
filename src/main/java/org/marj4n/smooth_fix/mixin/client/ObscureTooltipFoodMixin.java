@@ -21,25 +21,18 @@ import java.util.List;
  * of Obscure API's tooltip pipeline and removes the exception from EMI search indexing.
  */
 @Pseudo
-@Mixin(targets = "com.obscuria.obscureapi.client.tooltips.TooltipBuilder$AttributeIcons", remap = false)
+@Mixin(
+        targets = "com.obscuria.obscureapi.client.tooltips.TooltipBuilder$AttributeIcons",
+        remap = false)
 public abstract class ObscureTooltipFoodMixin {
 
-    @Inject(
-            method = "putFoodIcons",
-            at = @At("HEAD"),
-            cancellable = true,
-            require = 0
-    )
+    @Inject(method = "putFoodIcons", at = @At("HEAD"), cancellable = true, require = 0)
     private static void smoothFix$skipNullFoodComponent(
-            List<Text> tooltip,
-            ItemStack stack,
-            CallbackInfo ci
-    ) {
+            List<Text> tooltip, ItemStack stack, CallbackInfo ci) {
         if (stack == null || stack.isEmpty() || stack.getItem().getFoodComponent() == null) {
             SmoothFix.logPatchOnce(
                     "obscure_tooltip_null_food",
-                    "Guarded Obscure API food tooltip generation for non-food stacks during search indexing."
-            );
+                    "Guarded Obscure API food tooltip generation for non-food stacks during search indexing.");
             ci.cancel();
         }
     }

@@ -24,19 +24,18 @@ public abstract class EmiCompatPluginMixin {
 
     @Redirect(
             method = "register",
-            at = @At(
-                    value = "INVOKE",
-                    target = "Lnet/fabricmc/loader/api/FabricLoader;isModLoaded(Ljava/lang/String;)Z",
-                    remap = false
-            ),
-            require = 0
-    )
+            at =
+                    @At(
+                            value = "INVOKE",
+                            target =
+                                    "Lnet/fabricmc/loader/api/FabricLoader;isModLoaded(Ljava/lang/String;)Z",
+                            remap = false),
+            require = 0)
     private boolean smoothFix$skipLegacySpellEngineCompat(FabricLoader loader, String modId) {
         if ("spell_engine".equals(modId)) {
             SmoothFix.logPatchOnce(
                     "emi_compat_spell_engine",
-                    "Skipped EMI Compat 1.1.3 legacy Spell Engine integration; modern Spell Engine provides its own EMI plugin."
-            );
+                    "Skipped EMI Compat 1.1.3 legacy Spell Engine integration; modern Spell Engine provides its own EMI plugin.");
             return false;
         }
 

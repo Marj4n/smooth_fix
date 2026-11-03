@@ -19,11 +19,13 @@ import java.util.Set;
  * No mod files, entrypoints, dependencies, or client-side behavior are removed.
  */
 public final class ServerCompatibilityAdapter implements LanguageAdapter {
-    private static final Map<String, Target> CLIENT_CONFIGS = Map.of(
-            "shut-up-mcd", new Target("1.2.0", Set.of("shut-up-mcd.client.mixins.json")),
-            "enhancedblockentities", new Target("0.13.2", Set.of("enhancedblockentities.mixins.json"))
-    );
-    private record Target(String version, Set<String> configs) { }
+    private static final Map<String, Target> CLIENT_CONFIGS =
+            Map.of(
+                    "shut-up-mcd", new Target("1.2.0", Set.of("shut-up-mcd.client.mixins.json")),
+                    "enhancedblockentities",
+                            new Target("0.13.2", Set.of("enhancedblockentities.mixins.json")));
+
+    private record Target(String version, Set<String> configs) {}
 
     public ServerCompatibilityAdapter() {
         FabricLoader loader = FabricLoader.getInstance();
@@ -32,14 +34,22 @@ public final class ServerCompatibilityAdapter implements LanguageAdapter {
             return;
         }
         for (Map.Entry<String, Target> entry : CLIENT_CONFIGS.entrySet()) {
-            loader.getModContainer(entry.getKey()).ifPresent(mod -> {
-                if (mod.getMetadata().getVersion().getFriendlyString().equals(entry.getValue().version())) {
-                    repair(mod, entry.getValue().configs());
-                } else {
-                    SmoothFix.LOGGER.warn("Server client-hook guard was audited for {} {}, found {}; leaving its metadata unchanged.",
-                            entry.getKey(), entry.getValue().version(), mod.getMetadata().getVersion().getFriendlyString());
-                }
-            });
+            loader.getModContainer(entry.getKey())
+                    .ifPresent(
+                            mod -> {
+                                if (mod.getMetadata()
+                                        .getVersion()
+                                        .getFriendlyString()
+                                        .equals(entry.getValue().version())) {
+                                    repair(mod, entry.getValue().configs());
+                                } else {
+                                    SmoothFix.LOGGER.warn(
+                                            "Server client-hook guard was audited for {} {}, found {}; leaving its metadata unchanged.",
+                                            entry.getKey(),
+                                            entry.getValue().version(),
+                                            mod.getMetadata().getVersion().getFriendlyString());
+                                }
+                            });
         }
     }
 
@@ -47,8 +57,11 @@ public final class ServerCompatibilityAdapter implements LanguageAdapter {
         Object metadata = mod.getMetadata();
         // This is deliberately scoped to the inspected Fabric metadata schema.
         // Public ModMetadata exposes no setter for mixin environments.
-        if (!metadata.getClass().getName().equals("net.fabricmc.loader.impl.metadata.V1ModMetadata")) {
-            SmoothFix.LOGGER.warn("Server client-hook guard cannot inspect metadata for {}. No metadata changed.",
+        if (!metadata.getClass()
+                .getName()
+                .equals("net.fabricmc.loader.impl.metadata.V1ModMetadata")) {
+            SmoothFix.LOGGER.warn(
+                    "Server client-hook guard cannot inspect metadata for {}. No metadata changed.",
                     mod.getMetadata().getId());
             return;
         }
@@ -72,20 +85,26 @@ public final class ServerCompatibilityAdapter implements LanguageAdapter {
                     }
                 }
                 if (clientEnvironment == null) {
-                    throw new IllegalStateException("Fabric CLIENT mixin environment is unavailable");
+                    throw new IllegalStateException(
+                            "Fabric CLIENT mixin environment is unavailable");
                 }
                 environmentField.set(entry, clientEnvironment);
-                SmoothFix.LOGGER.info("[server_client_hooks] Corrected {} / {} to client-side mixin scope; mod remains installed.",
-                        mod.getMetadata().getId(), name);
+                SmoothFix.LOGGER.info(
+                        "[server_client_hooks] Corrected {} / {} to client-side mixin scope; mod remains installed.",
+                        mod.getMetadata().getId(),
+                        name);
             }
         } catch (ReflectiveOperationException | RuntimeException exception) {
-            SmoothFix.LOGGER.error("Cannot repair client mixin scope for {} on this Fabric Loader. Original JAR is unchanged.",
-                    mod.getMetadata().getId(), exception);
+            SmoothFix.LOGGER.error(
+                    "Cannot repair client mixin scope for {} on this Fabric Loader. Original JAR is unchanged.",
+                    mod.getMetadata().getId(),
+                    exception);
         }
     }
 
     @Override
-    public <T> T create(ModContainer mod, String value, Class<T> type) throws LanguageAdapterException {
+    public <T> T create(ModContainer mod, String value, Class<T> type)
+            throws LanguageAdapterException {
         return LanguageAdapter.getDefault().create(mod, value, type);
     }
 }

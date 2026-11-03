@@ -11,8 +11,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Pseudo
 @Mixin(targets = "dev.corgitaco.enhancedcelestials2core.client.AddonPrompts", remap = false)
 public abstract class EnhancedCelestialsShaderPromptMixin {
-    @Inject(method = "notifyIfMissingShaderSupport", at = @At("HEAD"), cancellable = true, require = 0)
-    private static void smoothfix$skipShaderSuggestion(PlayerEntity player, boolean force, CallbackInfoReturnable<Boolean> cir) {
+    @Inject(
+            method = "notifyIfMissingShaderSupport",
+            at = @At("HEAD"),
+            cancellable = true,
+            require = 0)
+    private static void smoothfix$skipShaderSuggestion(
+            PlayerEntity player, boolean force, CallbackInfoReturnable<Boolean> cir) {
         cir.setReturnValue(false);
     }
 }

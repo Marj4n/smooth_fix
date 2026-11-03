@@ -19,10 +19,17 @@ public abstract class ConfirmedTeleportAnchorMixin {
     @Shadow private double lastTickY;
     @Shadow private double lastTickZ;
 
-    @Inject(method = "onTeleportConfirm", at = @At(value = "FIELD",
-            target = "Lnet/minecraft/server/network/ServerPlayNetworkHandler;requestedTeleportPos:Lnet/minecraft/util/math/Vec3d;",
-            opcode = org.objectweb.asm.Opcodes.PUTFIELD, shift = At.Shift.AFTER))
-    private void smoothfix$rebaseAcceptedTeleport(TeleportConfirmC2SPacket packet, CallbackInfo ci) {
+    @Inject(
+            method = "onTeleportConfirm",
+            at =
+                    @At(
+                            value = "FIELD",
+                            target =
+                                    "Lnet/minecraft/server/network/ServerPlayNetworkHandler;requestedTeleportPos:Lnet/minecraft/util/math/Vec3d;",
+                            opcode = org.objectweb.asm.Opcodes.PUTFIELD,
+                            shift = At.Shift.AFTER))
+    private void smoothfix$rebaseAcceptedTeleport(
+            TeleportConfirmC2SPacket packet, CallbackInfo ci) {
         // This field is cleared only in the successful confirmation branch, on the server thread.
         if (requestedTeleportPos == null) {
             lastTickX = player.getX();

@@ -30,12 +30,7 @@ public abstract class TumbleweedClientInitMixin {
     @Shadow public Quaternionf quat;
     @Shadow public Quaternionf prevQuat;
 
-    @Inject(
-            method = "initClient",
-            at = @At("HEAD"),
-            cancellable = true,
-            require = 0
-    )
+    @Inject(method = "initClient", at = @At("HEAD"), cancellable = true, require = 0)
     private void smoothFix$useWorkerLocalRandomForEmiLoot(CallbackInfo ci) {
         String threadName = Thread.currentThread().getName();
         if (!threadName.startsWith("EMI Loot Worker")) {
@@ -51,8 +46,7 @@ public abstract class TumbleweedClientInitMixin {
 
         SmoothFix.logPatchOnce(
                 "emi_loot_tumbleweed",
-                "Replaced Tumbleweed client-world RNG access with worker-local RNG during EMI Loot indexing."
-        );
+                "Replaced Tumbleweed client-world RNG access with worker-local RNG during EMI Loot indexing.");
 
         ci.cancel();
     }

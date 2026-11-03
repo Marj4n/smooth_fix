@@ -24,13 +24,9 @@ public abstract class EmiRepairIngredientMixin {
 
     @Redirect(
             method = "addRepair",
-            at = @At(
-                    value = "INVOKE",
-                    target = "Lnet/minecraft/recipe/Ingredient;isEmpty()Z"
-            ),
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/recipe/Ingredient;isEmpty()Z"),
             require = 0,
-            remap = true
-    )
+            remap = true)
     private static boolean smoothFix$treatZeroStackRepairIngredientAsEmpty(Ingredient ingredient) {
         if (ingredient == null || ingredient.isEmpty()) {
             return true;
@@ -40,8 +36,7 @@ public abstract class EmiRepairIngredientMixin {
         if (stacks == null || stacks.length == 0) {
             SmoothFix.logPatchOnce(
                     "emi_repair_empty_ingredient",
-                    "Skipped an invalid EMI synthetic repair recipe whose material ingredient exposes zero matching stacks."
-            );
+                    "Skipped an invalid EMI synthetic repair recipe whose material ingredient exposes zero matching stacks.");
             return true;
         }
 
