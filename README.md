@@ -10,7 +10,7 @@ Use JDK 21; output targets Java 17.
 ./gradlew build
 ```
 
-Install the regular JAR from `build/libs/` with Fabric API. Options are stored in `config/smooth_fix.json`. Compatibility adapters check their supported upstream versions; do not remove those guards.
+Install the regular JAR from `build/libs/` with Fabric API. Options are stored in `config/smooth_fix.json`. The registry-cache lifecycle fix defaults on only for the audited Kilt/ModernFix binary pair. Existing configs retain their chosen value; set `kiltModernFixRegistryCacheBridge` to `true` to enable it, or `false` to opt out. Compatibility adapters check their supported upstream versions; do not remove those guards.
 
 ## Source layout
 
