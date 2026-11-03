@@ -1,2 +1,39 @@
-Copyright (c) 2026 Marj4n
-All rights reserved.
+MARJ4N PERMISSION-REQUIRED NOTICE
+
+Copyright (c) 2026 Marj4n. All rights reserved in material owned by Marj4n.
+
+Scope
+This notice applies only to original source code, artwork and other material
+whose rights are held by Marj4n. It does not claim ownership of third-party
+code, assets, dependencies, names or trademarks.
+
+Playing the mod
+You may install and play official, unmodified releases on clients and servers,
+and show gameplay in screenshots, videos and streams. Modpacks may reference
+official downloads through their distribution platform's manifest mechanism.
+
+Permission required
+Except for the permissions above, applicable law, GitHub's platform rights,
+or another valid license or written grant, copying or reusing Marj4n-owned
+source/assets, modifying or porting them, creating derivative works,
+redistributing them, or publishing modified builds requires prior written
+permission from Marj4n. Attribution alone is not permission. Public visibility
+does not grant a general license to reuse the source or assets.
+
+Permission requests
+Contact Marj4n using the contact methods listed at:
+https://nivekts.vercel.app/
+Describe the material, intended changes and planned distribution. Permission
+must be received in writing before the proposed use.
+
+Third-party and existing rights
+Third-party material remains subject to its own authorship and license terms.
+This notice neither replaces those terms nor establishes that permission has
+been obtained. Rights already granted under third-party licenses, prior valid
+grants, applicable law or GitHub's terms are not revoked or restricted here.
+Contact requirements in this notice do not apply to rights independently
+granted by those terms. No permission to use a third party's work is granted
+on that party's behalf.
+
+The material is provided AS IS, without warranties, to the extent permitted
+by applicable law.
