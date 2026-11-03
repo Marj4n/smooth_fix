@@ -5,7 +5,6 @@ import net.minecraft.text.Text;
 import org.marj4n.smooth_fix.SmoothFix;
 import org.marj4n.smooth_fix.config.SmoothFixConfig;
 
-
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.locks.LockSupport;
@@ -13,7 +12,8 @@ import java.util.concurrent.locks.LockSupport;
 /** No active recorder, timing arrays or sampler thread during normal gameplay. */
 public final class ClientFrameProfiler {
     private static volatile Recording active;
-    private ClientFrameProfiler() { }
+
+    private ClientFrameProfiler() {}
 
     public static boolean start(MinecraftClient client, int seconds) {
         if (active != null || client.world == null) return false;
@@ -29,8 +29,11 @@ public final class ClientFrameProfiler {
         if (active != null || client.world == null) return false;
         Recording recording = new Recording(client, seconds, automaticSave);
         active = recording;
-        if(recording.stackSampling || automaticSave){Thread thread = new Thread(recording, "Smooth Fix Frame Sampler");
-        thread.setDaemon(true);thread.start();}
+        if (recording.stackSampling || automaticSave) {
+            Thread thread = new Thread(recording, "Smooth Fix Frame Sampler");
+            thread.setDaemon(true);
+            thread.start();
+        }
         return true;
     }
 
@@ -38,7 +41,10 @@ public final class ClientFrameProfiler {
         Recording r = active;
         if (r == null) return;
         long now = System.nanoTime();
-        if (r.previousStart != 0){r.intervals.add(now - r.previousStart);r.timeline.add(now-r.started,now-r.previousStart,false);}
+        if (r.previousStart != 0) {
+            r.intervals.add(now - r.previousStart);
+            r.timeline.add(now - r.started, now - r.previousStart, false);
+        }
         r.previousStart = now;
         r.frameStart = now;
         r.working = true;
@@ -50,13 +56,20 @@ public final class ClientFrameProfiler {
         long elapsed = System.nanoTime() - r.frameStart;
         r.working = false;
         r.work.add(elapsed);
-        r.timeline.add(System.nanoTime()-r.started,elapsed,true);
+        r.timeline.add(System.nanoTime() - r.started, elapsed, true);
     }
 
-    public static boolean isActive() { return active != null; }
-    public static void stop() { Recording r = active; if (r != null) r.stop = true; }
+    public static boolean isActive() {
+        return active != null;
+    }
+
+    public static void stop() {
+        Recording r = active;
+        if (r != null) r.stop = true;
+    }
+
     /** Called on the render thread by the benchmark; stops and returns exactly one recording. */
-    public static Map<String,Object> finishNow() {
+    public static Map<String, Object> finishNow() {
         Recording r = active;
         return r == null ? Map.of("error", "no active recording") : r.finish(false);
     }
@@ -67,23 +80,53 @@ public final class ClientFrameProfiler {
         scene.put("simulationDistance", client.options.getSimulationDistance().getValue());
         scene.put("fpsLimit", client.options.getMaxFps().getValue());
         scene.put("vsync", client.options.getEnableVsync().getValue());
-        scene.put("particlesSetting",client.options.getParticles().getValue().toString());
-        scene.put("graphicsMode",client.options.getGraphicsMode().getValue().toString());
-        scene.put("entityDistanceScaling",client.options.getEntityDistanceScaling().getValue());
-        scene.put("biomeBlendRadius",client.options.getBiomeBlendRadius().getValue());
+        scene.put("particlesSetting", client.options.getParticles().getValue().toString());
+        scene.put("graphicsMode", client.options.getGraphicsMode().getValue().toString());
+        scene.put("entityDistanceScaling", client.options.getEntityDistanceScaling().getValue());
+        scene.put("biomeBlendRadius", client.options.getBiomeBlendRadius().getValue());
         scene.put("framebufferWidth", client.getWindow().getFramebufferWidth());
         scene.put("framebufferHeight", client.getWindow().getFramebufferHeight());
         scene.put("gpuVendor", org.lwjgl.opengl.GL11.glGetString(org.lwjgl.opengl.GL11.GL_VENDOR));
-        scene.put("gpuRenderer", org.lwjgl.opengl.GL11.glGetString(org.lwjgl.opengl.GL11.GL_RENDERER));
-        scene.put("openGlVersion", org.lwjgl.opengl.GL11.glGetString(org.lwjgl.opengl.GL11.GL_VERSION));
+        scene.put(
+                "gpuRenderer",
+                org.lwjgl.opengl.GL11.glGetString(org.lwjgl.opengl.GL11.GL_RENDERER));
+        scene.put(
+                "openGlVersion",
+                org.lwjgl.opengl.GL11.glGetString(org.lwjgl.opengl.GL11.GL_VERSION));
         Map<String, String> versions = new LinkedHashMap<>();
-        for (String mod : java.util.List.of("sodium", "iris", "fancymenu", "dynamic_resource_bars", "presencefootsteps", "saintsdragons", "emi")) {
-            net.fabricmc.loader.api.FabricLoader.getInstance().getModContainer(mod).ifPresent(container ->
-                    versions.put(mod, container.getMetadata().getVersion().getFriendlyString()));
+        for (String mod :
+                java.util.List.of(
+                        "sodium",
+                        "iris",
+                        "fancymenu",
+                        "dynamic_resource_bars",
+                        "presencefootsteps",
+                        "saintsdragons",
+                        "emi")) {
+            net.fabricmc.loader.api.FabricLoader.getInstance()
+                    .getModContainer(mod)
+                    .ifPresent(
+                            container ->
+                                    versions.put(
+                                            mod,
+                                            container
+                                                    .getMetadata()
+                                                    .getVersion()
+                                                    .getFriendlyString()));
         }
         scene.put("clientCompatibilityVersions", versions);
-        if (client.world != null) scene.put("dimension", client.world.getRegistryKey().getValue().toString());
-        if (client.player != null) scene.put("position", Map.of("x",client.player.getX(),"y",client.player.getY(),"z",client.player.getZ()));
+        if (client.world != null)
+            scene.put("dimension", client.world.getRegistryKey().getValue().toString());
+        if (client.player != null)
+            scene.put(
+                    "position",
+                    Map.of(
+                            "x",
+                            client.player.getX(),
+                            "y",
+                            client.player.getY(),
+                            "z",
+                            client.player.getZ()));
         return scene;
     }
 
@@ -110,7 +153,7 @@ public final class ClientFrameProfiler {
 
         private Recording(MinecraftClient client, int seconds, boolean automaticSave) {
             this.automaticSave = automaticSave;
-            this.stackSampling=automaticSave || SmoothFixConfig.get().benchmarkStackSampling;
+            this.stackSampling = automaticSave || SmoothFixConfig.get().benchmarkStackSampling;
             this.client = client;
             this.seconds = seconds;
             int configured = SmoothFixConfig.get().diagnosticTargetFps;
@@ -123,10 +166,13 @@ public final class ClientFrameProfiler {
             this.memoryStart = MemoryReport.snapshot("client");
         }
 
-        @Override public void run() {
+        @Override
+        public void run() {
             long deadline = System.nanoTime() + seconds * 1_000_000_000L;
             try {
-                while (!stop && (!automaticSave || System.nanoTime() < deadline) && client.isRunning()) {
+                while (!stop
+                        && (!automaticSave || System.nanoTime() < deadline)
+                        && client.isRunning()) {
                     long start = frameStart;
                     if (stackSampling && working && System.nanoTime() - start > budgetNanos) {
                         StackTraceElement[] trace = renderThread.getStackTrace();
@@ -143,30 +189,52 @@ public final class ClientFrameProfiler {
             }
         }
 
-        private synchronized Map<String,Object> finish(boolean save) {
+        private synchronized Map<String, Object> finish(boolean save) {
             if (finished) return Map.of("error", "recording already completed");
-            finished = true; stop = true;
+            finished = true;
+            stop = true;
             if (active == this) active = null;
-            Map<String,Object> report = MemoryReport.snapshot("client");
+            Map<String, Object> report = MemoryReport.snapshot("client");
             report.put("memoryAtStart", memoryStart);
             MemoryReport.addCollectorDeltas(report, memoryStart);
             report.put("sceneAtStart", sceneStart);
             report.put("sceneAtEnd", scene(client));
-            report.put("elapsedSeconds", (System.nanoTime()-started)/1_000_000_000.0);
-            var intervalSummary=intervals.snapshot();
-            report.put("frameIntervals",intervalSummary);
-            report.put("fpsFromIntervals",TimingSamples.frameRates(intervalSummary));
+            report.put("elapsedSeconds", (System.nanoTime() - started) / 1_000_000_000.0);
+            var intervalSummary = intervals.snapshot();
+            report.put("frameIntervals", intervalSummary);
+            report.put("fpsFromIntervals", TimingSamples.frameRates(intervalSummary));
             report.put("frameWorkBeforePresent", work.snapshot());
-            report.put("frameTimeline",timeline.snapshot());
-            report.put("frameTimelineNote","Exact 1-second totals, up to 600 seconds, assigned by sample completion time. Includes loading/preparation in advanced stages. Empty buckets can indicate a long stall; no per-second percentiles or GPU measurements.");
-            report.put("sampler", Map.of("requestedSeconds",seconds,"intervalMs",10,"thresholdMs",budgetNanos/1_000_000.0,"targetFps",targetFps,"stackSamplingEnabled",stackSampling));
+            report.put("frameTimeline", timeline.snapshot());
+            report.put(
+                    "frameTimelineNote",
+                    "Exact 1-second totals, up to 600 seconds, assigned by sample completion time. Includes loading/preparation in advanced stages. Empty buckets can indicate a long stall; no per-second percentiles or GPU measurements.");
+            report.put(
+                    "sampler",
+                    Map.of(
+                            "requestedSeconds",
+                            seconds,
+                            "intervalMs",
+                            10,
+                            "thresholdMs",
+                            budgetNanos / 1_000_000.0,
+                            "targetFps",
+                            targetFps,
+                            "stackSamplingEnabled",
+                            stackSampling));
             report.put("slowFrameStacks", stacks.snapshot());
-            report.put("measurementNote", "Entire recording totals; percentile reservoir is bounded to 8192. Work excludes presentation/FPS waits. Intervals include waits. GPU time is not measured. Sampling adds overhead. Stack estimates include error bounds; observations are not CPU percentages.");
-            if (save) try {
-                String path = MemoryReport.write("client_profile", report).toString();
-                SmoothFix.LOGGER.info("Smooth Fix client frame profile saved: {}", path);
-                if (client.player != null) client.player.sendMessage(Text.literal("Smooth Fix frame profile: " + path), false);
-            } catch (Exception e) { SmoothFix.LOGGER.error("Could not save client frame profile", e); }
+            report.put(
+                    "measurementNote",
+                    "Entire recording totals; percentile reservoir is bounded to 8192. Work excludes presentation/FPS waits. Intervals include waits. GPU time is not measured. Sampling adds overhead. Stack estimates include error bounds; observations are not CPU percentages.");
+            if (save)
+                try {
+                    String path = MemoryReport.write("client_profile", report).toString();
+                    SmoothFix.LOGGER.info("Smooth Fix client frame profile saved: {}", path);
+                    if (client.player != null)
+                        client.player.sendMessage(
+                                Text.literal("Smooth Fix frame profile: " + path), false);
+                } catch (Exception e) {
+                    SmoothFix.LOGGER.error("Could not save client frame profile", e);
+                }
             return report;
         }
     }

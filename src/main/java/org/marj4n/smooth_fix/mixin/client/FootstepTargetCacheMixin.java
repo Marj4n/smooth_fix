@@ -17,15 +17,22 @@ public abstract class FootstepTargetCacheMixin {
     @Unique private boolean smoothFix$usingCachedTargets;
 
     @Inject(method = "getTargets", at = @At("HEAD"), cancellable = true, require = 0)
-    private void smoothFix$reuseTargets(Entity camera, CallbackInfoReturnable<Stream<? extends Entity>> callback) {
+    private void smoothFix$reuseTargets(
+            Entity camera, CallbackInfoReturnable<Stream<? extends Entity>> callback) {
         List<? extends Entity> cached = FootstepTargetCache.get(this, camera);
         smoothFix$usingCachedTargets = cached != null;
-        if (cached != null) callback.setReturnValue(cached.stream()
-                .filter(entity -> !entity.isRemoved() && entity.getWorld() == camera.getWorld()));
+        if (cached != null)
+            callback.setReturnValue(
+                    cached.stream()
+                            .filter(
+                                    entity ->
+                                            !entity.isRemoved()
+                                                    && entity.getWorld() == camera.getWorld()));
     }
 
     @Inject(method = "getTargets", at = @At("RETURN"), cancellable = true, require = 0)
-    private void smoothFix$rememberTargets(Entity camera, CallbackInfoReturnable<Stream<? extends Entity>> callback) {
+    private void smoothFix$rememberTargets(
+            Entity camera, CallbackInfoReturnable<Stream<? extends Entity>> callback) {
         if (smoothFix$usingCachedTargets) return;
         List<? extends Entity> targets = callback.getReturnValue().toList();
         FootstepTargetCache.put(this, camera, targets);

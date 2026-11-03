@@ -14,38 +14,44 @@ import java.util.Set;
 public final class RelevantDragonEntities {
     private static final String DRAGON_PACKAGE = "com.leon.saintsdragons.server.entity.dragons.";
     private static final String IGNIVORUS = DRAGON_PACKAGE + "ignivorus.Ignivorus";
-    private static final ClassValue<Set<String>> TYPE_NAMES = new ClassValue<>() {
-        @Override
-        protected Set<String> computeValue(Class<?> entityClass) {
-            Set<String> names = new HashSet<>();
-            for (Class<?> type = entityClass; type != null; type = type.getSuperclass()) {
-                if (type.getName().startsWith(DRAGON_PACKAGE)) names.add(type.getName());
-            }
-            return Set.copyOf(names);
-        }
-    };
+    private static final ClassValue<Set<String>> TYPE_NAMES =
+            new ClassValue<>() {
+                @Override
+                protected Set<String> computeValue(Class<?> entityClass) {
+                    Set<String> names = new HashSet<>();
+                    for (Class<?> type = entityClass; type != null; type = type.getSuperclass()) {
+                        if (type.getName().startsWith(DRAGON_PACKAGE)) names.add(type.getName());
+                    }
+                    return Set.copyOf(names);
+                }
+            };
     private static ClientWorld indexedWorld;
     private static boolean installed;
     private static final Set<Entity> dragons = new LinkedHashSet<>();
     private static final Map<String, Set<Entity>> typedDragons = new HashMap<>();
 
-    private RelevantDragonEntities() { }
+    private RelevantDragonEntities() {}
 
     public static void install() {
         if (installed) return;
         installed = true;
-        ClientEntityEvents.ENTITY_LOAD.register((entity, world) -> {
-            if (world != indexedWorld) return;
-            Set<String> types = TYPE_NAMES.get(entity.getClass());
-            if (types.isEmpty()) return;
-            dragons.add(entity);
-            typedDragons.forEach((type, entities) -> { if (types.contains(type)) entities.add(entity); });
-        });
-        ClientEntityEvents.ENTITY_UNLOAD.register((entity, world) -> {
-            if (world != indexedWorld) return;
-            dragons.remove(entity);
-            typedDragons.values().forEach(entities -> entities.remove(entity));
-        });
+        ClientEntityEvents.ENTITY_LOAD.register(
+                (entity, world) -> {
+                    if (world != indexedWorld) return;
+                    Set<String> types = TYPE_NAMES.get(entity.getClass());
+                    if (types.isEmpty()) return;
+                    dragons.add(entity);
+                    typedDragons.forEach(
+                            (type, entities) -> {
+                                if (types.contains(type)) entities.add(entity);
+                            });
+                });
+        ClientEntityEvents.ENTITY_UNLOAD.register(
+                (entity, world) -> {
+                    if (world != indexedWorld) return;
+                    dragons.remove(entity);
+                    typedDragons.values().forEach(entities -> entities.remove(entity));
+                });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> clear());
     }
 
@@ -61,13 +67,15 @@ public final class RelevantDragonEntities {
                 if (!TYPE_NAMES.get(entity.getClass()).isEmpty()) dragons.add(entity);
             }
         }
-        return typedDragons.computeIfAbsent(binaryType, type -> {
-            Set<Entity> matches = new LinkedHashSet<>();
-            for (Entity entity : dragons) {
-                if (TYPE_NAMES.get(entity.getClass()).contains(type)) matches.add(entity);
-            }
-            return matches;
-        });
+        return typedDragons.computeIfAbsent(
+                binaryType,
+                type -> {
+                    Set<Entity> matches = new LinkedHashSet<>();
+                    for (Entity entity : dragons) {
+                        if (TYPE_NAMES.get(entity.getClass()).contains(type)) matches.add(entity);
+                    }
+                    return matches;
+                });
     }
 
     public static void clear() {

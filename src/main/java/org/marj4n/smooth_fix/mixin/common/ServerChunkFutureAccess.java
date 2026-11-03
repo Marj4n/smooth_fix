@@ -13,5 +13,6 @@ import java.util.concurrent.CompletableFuture;
 @Mixin(ServerChunkManager.class)
 public interface ServerChunkFutureAccess {
     @Invoker("getChunkFuture")
-    CompletableFuture<Either<Chunk, ChunkHolder.Unloaded>> smoothfix$requestChunk(int x, int z, ChunkStatus status, boolean create);
+    CompletableFuture<Either<Chunk, ChunkHolder.Unloaded>> smoothfix$requestChunk(
+            int x, int z, ChunkStatus status, boolean create);
 }

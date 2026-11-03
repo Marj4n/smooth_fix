@@ -14,7 +14,9 @@ public final class TickCadence {
 
     public Map<String, Object> snapshot() {
         Map<String, Object> report = intervals.snapshot();
-        report.put("measurement", "Server tick start-to-start wall clock, including scheduled sleep, queued tasks and JVM pauses. Normal pacing is about 50ms; values just above 50ms can be scheduler jitter. This is not tick CPU work. First/last partial intervals are excluded.");
+        report.put(
+                "measurement",
+                "Server tick start-to-start wall clock, including scheduled sleep, queued tasks and JVM pauses. Normal pacing is about 50ms; values just above 50ms can be scheduler jitter. This is not tick CPU work. First/last partial intervals are excluded.");
         return report;
     }
 }

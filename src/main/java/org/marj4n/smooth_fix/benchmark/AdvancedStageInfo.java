@@ -31,12 +31,31 @@ public final class AdvancedStageInfo {
             default -> "Preparing the workload";
         };
     }
-    public static String legacyTask(String name,String mode){return task(name.equals("baseline")?"baseline":name.startsWith("village")?"village":name.startsWith("wither")?"wither":mode);}
+
+    public static String legacyTask(String name, String mode) {
+        return task(
+                name.equals("baseline")
+                        ? "baseline"
+                        : name.startsWith("village")
+                                ? "village"
+                                : name.startsWith("wither") ? "wither" : mode);
+    }
+
     public static boolean walking(String mode) {
         return switch (mode) {
-            case "route", "cold_route", "structure", "combat", "effects", "bloodmoon", "break", "nether", "end" -> true;
+            case "route",
+                    "cold_route",
+                    "structure",
+                    "combat",
+                    "effects",
+                    "bloodmoon",
+                    "break",
+                    "nether",
+                    "end" ->
+                    true;
             default -> false;
         };
     }
-    private AdvancedStageInfo() { }
+
+    private AdvancedStageInfo() {}
 }

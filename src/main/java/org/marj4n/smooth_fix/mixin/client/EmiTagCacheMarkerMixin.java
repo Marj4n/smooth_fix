@@ -1,6 +1,8 @@
 package org.marj4n.smooth_fix.mixin.client;
+
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
+
 @Pseudo
 @Mixin(targets = "dev.emi.emi.runtime.EmiTagKey", remap = false, priority = 900)
-public abstract class EmiTagCacheMarkerMixin { }
+public abstract class EmiTagCacheMarkerMixin {}

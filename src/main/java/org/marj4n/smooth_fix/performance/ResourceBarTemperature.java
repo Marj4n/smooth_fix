@@ -4,18 +4,19 @@ import java.lang.reflect.Method;
 
 /** Cache optional Thermoo discovery by player class, including an absent method. */
 public final class ResourceBarTemperature {
-    private static final ClassValue<Lookup> TEMPERATURE = new ClassValue<>() {
-        @Override
-        protected Lookup computeValue(Class<?> playerClass) {
-            try {
-                return new Lookup(playerClass.getMethod("thermoo$getTemperatureScale"));
-            } catch (NoSuchMethodException exception) {
-                return new Lookup(null);
-            }
-        }
-    };
+    private static final ClassValue<Lookup> TEMPERATURE =
+            new ClassValue<>() {
+                @Override
+                protected Lookup computeValue(Class<?> playerClass) {
+                    try {
+                        return new Lookup(playerClass.getMethod("thermoo$getTemperatureScale"));
+                    } catch (NoSuchMethodException exception) {
+                        return new Lookup(null);
+                    }
+                }
+            };
 
-    private ResourceBarTemperature() { }
+    private ResourceBarTemperature() {}
 
     public static float scale(Object player) {
         try {
@@ -28,5 +29,5 @@ public final class ResourceBarTemperature {
         }
     }
 
-    private record Lookup(Method method) { }
+    private record Lookup(Method method) {}
 }

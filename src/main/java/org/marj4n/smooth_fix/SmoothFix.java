@@ -21,10 +21,12 @@ public final class SmoothFix implements ModInitializer {
     public void onInitialize() {
         SmoothFixConfig config = SmoothFixConfig.get();
         org.marj4n.smooth_fix.performance.LifecycleRetentionCleanup.install();
-        net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
-            if (net.fabricmc.loader.api.FabricLoader.getInstance().getEnvironmentType() == net.fabricmc.api.EnvType.SERVER)
-                org.marj4n.smooth_fix.performance.ReportIo.shutdown();
-        });
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STOPPED.register(
+                server -> {
+                    if (net.fabricmc.loader.api.FabricLoader.getInstance().getEnvironmentType()
+                            == net.fabricmc.api.EnvType.SERVER)
+                        org.marj4n.smooth_fix.performance.ReportIo.shutdown();
+                });
 
         if (config.diagnostics && config.profilingTelemetry) {
             ServerDiagnostics.install();
@@ -33,17 +35,23 @@ public final class SmoothFix implements ModInitializer {
         }
 
         LOGGER.info("{} initialized.", MOD_NAME);
-        LOGGER.info("Build {}: model rotation allocation fix={}, confirmed teleport anchor={}, background worker limit={}",
-                BUILD_ID, config.modelRotationAllocationFix, config.confirmedTeleportAnchorFix, config.backgroundWorkerLimit);
-        LOGGER.info("Server client-hook guard={}, invalid rotation guard={}, diagnostics={}",
-                config.dedicatedServerClientMixinGuard, config.invalidEntityRotationGuard, config.diagnostics);
+        LOGGER.info(
+                "Build {}: model rotation allocation fix={}, confirmed teleport anchor={}, background worker limit={}",
+                BUILD_ID,
+                config.modelRotationAllocationFix,
+                config.confirmedTeleportAnchorFix,
+                config.backgroundWorkerLimit);
+        LOGGER.info(
+                "Server client-hook guard={}, invalid rotation guard={}, diagnostics={}",
+                config.dedicatedServerClientMixinGuard,
+                config.invalidEntityRotationGuard,
+                config.diagnostics);
         LOGGER.info(
                 "Configured patches: EMI Compat/Spell Engine={}, EMI Loot/Tumbleweed={}, Obscure API tooltip={}, EMI repair ingredient={}",
                 config.emiCompatSpellEngine,
                 config.emiLootTumbleweed,
                 config.obscureTooltipNullFood,
-                config.emiRepairEmptyIngredient
-        );
+                config.emiRepairEmptyIngredient);
     }
 
     public static void logPatchOnce(String patchId, String message) {
@@ -52,6 +60,5 @@ public final class SmoothFix implements ModInitializer {
         }
     }
 
-    public SmoothFix() {
-    }
+    public SmoothFix() {}
 }
