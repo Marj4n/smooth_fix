@@ -5,7 +5,7 @@ import org.marj4n.smooth_fix.SmoothFix;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 
-/** Explicit experimental opt-in, two raw-class hashes and actual ModernFix enabled-option gate. */
+/** Configurable lifecycle fix guarded by both raw-class hashes and the active ModernFix option. */
 public final class KiltRegistryCacheAudit {
     private KiltRegistryCacheAudit() {}
 
@@ -59,7 +59,7 @@ public final class KiltRegistryCacheAudit {
                 return false;
             SmoothFix.logPatchOnce(
                     "kilt-modernfix-registry-cache",
-                    "Experimental Kilt/ModernFix Forge registry-cache bridge requested; actual application and lifecycle acceptance remain separately verified");
+                    "Audited Kilt/ModernFix registry-cache bridge enabled; original registry IDs and native lazy invalidation retained");
             return true;
         } catch (Exception e) {
             SmoothFix.LOGGER.warn(

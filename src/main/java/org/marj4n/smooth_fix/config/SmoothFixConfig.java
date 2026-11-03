@@ -71,8 +71,8 @@ public final class SmoothFixConfig {
     /** Experimental: closes fully consumed recipe streams in audited Sortilege 9.0 only. */
     public boolean sortilegeReloadStreamClosureFix = false;
 
-    /** Experimental missing Forge-side ModernFix cache bridge under audited Kilt; OFF pending lifecycle validation. */
-    public boolean kiltModernFixRegistryCacheBridge = false;
+    /** Avoid eager registry-cache rebakes with the hash-verified Kilt/ModernFix pair. */
+    public boolean kiltModernFixRegistryCacheBridge = true;
 
     public boolean modelRotationAllocationFix = true;
     public boolean bewitchmentSigilSearchFix = true;
