@@ -22,7 +22,7 @@ does not grant a general license to reuse the source or assets.
 
 Permission requests
 Contact Marj4n using the contact methods listed at:
-https://nivekts.vercel.app/
+https://marj4n.vercel.app/
 Describe the material, intended changes and planned distribution. Permission
 must be received in writing before the proposed use.
 

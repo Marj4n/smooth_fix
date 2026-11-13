@@ -24,4 +24,4 @@ By Marj4n. See [LICENSE.txt](LICENSE.txt). Horizon research informed testing and
 
 ## Reuse permissions
 
-Reusing or modifying Marj4n-owned source code or assets requires prior written permission. Contact Marj4n through [nivekts.vercel.app](https://nivekts.vercel.app/) with the intended use. See [LICENSE.txt](LICENSE.txt) for gameplay permissions and exceptions. Third-party licenses, existing grants and GitHub platform rights remain applicable.
+Reusing or modifying Marj4n-owned source code or assets requires prior written permission. Contact Marj4n through [marj4n.vercel.app](https://marj4n.vercel.app/) with the intended use. See [LICENSE.txt](LICENSE.txt) for gameplay permissions and exceptions. Third-party licenses, existing grants and GitHub platform rights remain applicable.
